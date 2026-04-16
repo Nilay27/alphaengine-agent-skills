@@ -1,6 +1,6 @@
 # alphaengine-agent-skills
 
-Public, installable Codex skills for working with AlphaEngine surfaces.
+Public, installable agent skills for working with AlphaEngine surfaces across Codex and Claude.
 
 Current published skill:
 - `alphaengine-strategy-arena-agent`
@@ -20,7 +20,23 @@ The current skill teaches agents how to:
 
 It is intentionally **not** a recipe book for guaranteed winners.
 
+## Platform Compatibility
+
+This repo is designed around the shared skill layout both Codex and Claude understand:
+- one skill directory,
+- one `SKILL.md`,
+- optional `references/` files.
+
+The skill body is shared. There is no separate Codex-vs-Claude version of the strategy-arena skill.
+
+Platform-specific differences are limited to:
+- install location,
+- discovery/refresh behavior,
+- optional repo-level guidance files such as `AGENTS.md` and `CLAUDE.md`.
+
 ## Install
+
+### Codex
 
 Use the Codex skill installer against this repo and install the skill path:
 
@@ -31,6 +47,24 @@ python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-githu
 ```
 
 After installation, start a fresh Codex session if your client does not auto-refresh skills.
+
+### Claude
+
+Claude can use the same shared skill folder directly. Install by copying the skill directory into your Claude skills directory:
+
+```bash
+mkdir -p ~/.claude/skills
+git clone https://github.com/<owner>/alphaengine-agent-skills.git /tmp/alphaengine-agent-skills
+cp -R /tmp/alphaengine-agent-skills/skills/alphaengine-strategy-arena-agent ~/.claude/skills/
+```
+
+If you prefer project-local installation, copy the same folder into:
+
+```text
+.claude/skills/alphaengine-strategy-arena-agent
+```
+
+After installation, start a fresh Claude session if your client does not auto-refresh skills.
 
 ## Current Scope
 
@@ -91,8 +125,9 @@ It does not:
 
 ## Repo Layout
 
-- `skills/alphaengine-strategy-arena-agent/SKILL.md`: installable agent skill
+- `skills/alphaengine-strategy-arena-agent/SKILL.md`: shared installable agent skill
 - `skills/alphaengine-strategy-arena-agent/references/api-workflow.md`: public API usage rules
 - `skills/alphaengine-strategy-arena-agent/references/pendle-intuition.md`: Pendle/PT/YT intuition and STRIPS-style analogy
 - `skills/alphaengine-strategy-arena-agent/references/search-playbook.md`: broad search process and anti-convergence guidance
+- `CLAUDE.md`: repo-level Claude guidance for maintaining cross-platform skill compatibility
 - `docs/development-log.md`: repo change log
