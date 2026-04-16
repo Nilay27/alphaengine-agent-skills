@@ -42,7 +42,7 @@ Use the Codex skill installer against this repo and install the skill path:
 
 ```bash
 python3 ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py \
-  --repo <owner>/alphaengine-agent-skills \
+  --repo Nilay27/alphaengine-agent-skills \
   --path skills/alphaengine-strategy-arena-agent
 ```
 
@@ -54,7 +54,7 @@ Claude can use the same shared skill folder directly. Install by copying the ski
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone https://github.com/<owner>/alphaengine-agent-skills.git /tmp/alphaengine-agent-skills
+git clone https://github.com/Nilay27/alphaengine-agent-skills.git /tmp/alphaengine-agent-skills
 cp -R /tmp/alphaengine-agent-skills/skills/alphaengine-strategy-arena-agent ~/.claude/skills/
 ```
 
@@ -99,7 +99,11 @@ Explore the Pendle yield strategy catalog, test broad categories first, then ref
 Optimize for evaluation.data.score and show the supporting diagnostics.
 ```
 
-For local testing, the same skill can be aimed at a local router instance, for example `http://localhost:8080`.
+For normal public usage, point the skill at the deployed AlphaEngine API endpoint.
+
+The `http://localhost:8080` form is only for:
+- AlphaEngine maintainers,
+- contributors testing against a locally running `api-router`.
 
 ## Search Philosophy
 
