@@ -1,38 +1,69 @@
 # alphaengine-agent-skills
 
-Public, installable agent skills for working with AlphaEngine surfaces across Codex and Claude.
+<div align="center">
 
-Current published skill:
-- `alphaengine-strategy-arena-agent`
+Public agent skills for exploring AlphaEngine surfaces through Codex and Claude.
 
-## Purpose
+[![Codex](https://img.shields.io/badge/Codex-supported-black)](https://github.com/Nilay27/alphaengine-agent-skills)
+[![Claude](https://img.shields.io/badge/Claude-supported-6C47FF)](https://github.com/Nilay27/alphaengine-agent-skills)
+[![AlphaEngine API](https://img.shields.io/badge/API-public_router-0A7F5A)](https://github.com/Nilay27/api-router)
+[![Pendle](https://img.shields.io/badge/Domain-Pendle_yield_trading-1E90FF)](https://docs.pendle.finance/)
 
-This repo is for users who want agents to work with AlphaEngine directly.
+</div>
 
-The skill is meant to work against AlphaEngine's public router directly. It does not require the thin client, although users can still wrap the same endpoints in their own client or SDK if they prefer.
+This repo publishes shared public agent skills for AlphaEngine.
 
-The current skill teaches agents how to:
-- call AlphaEngine's public `api-router`,
+The first live skill, `alphaengine-strategy-arena-agent`, teaches agents how to:
+- query AlphaEngine's public `api-router`,
 - explore the Pendle yield strategy catalog,
 - run simulations and evaluations,
-- compare strategies using the beta scoring model,
+- compare candidates using the beta scoring model,
 - search broadly without collapsing everyone onto the same canned ideas.
 
 It is intentionally **not** a recipe book for guaranteed winners.
 
-## Platform Compatibility
+## Quick Links
 
-This repo is designed around the shared skill layout both Codex and Claude understand:
-- one skill directory,
-- one `SKILL.md`,
-- optional `references/` files.
+- [What You Get](#what-you-get)
+- [How It Works](#how-it-works)
+- [Install](#install)
+- [Current Public API Scope](#current-public-api-scope)
+- [Why Pendle](#why-pendle)
+- [Search Philosophy](#search-philosophy)
+- [Repo Layout](#repo-layout)
 
-The skill body is shared. There is no separate Codex-vs-Claude version of the strategy-arena skill.
+## What You Get
 
-Platform-specific differences are limited to:
-- install location,
-- discovery/refresh behavior,
-- optional repo-level guidance files such as `AGENTS.md` and `CLAUDE.md`.
+With the current skill, an agent can:
+- enumerate the live strategy arena catalog,
+- inspect parameter schemas,
+- inspect available markets,
+- run simulation requests,
+- run evaluation requests,
+- sort candidates by `evaluation.data.score`,
+- explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility.
+
+This is useful for:
+- fast exploration of Pendle yield strategies,
+- comparing different combinations and parameter sets,
+- building UI-side workflows on top of the same public API,
+- letting users or AI agents spend real search effort instead of following a fixed template.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A[Agent] --> B[GET strategies]
+    B --> C[GET parameters + markets]
+    C --> D[POST simulations]
+    D --> E[POST evaluations]
+    E --> F[Sort by score]
+    F --> G[Refine promising candidates]
+```
+
+Public access terminates at AlphaEngine's deployed `api-router`.
+
+The skill does **not** require the thin client. Users can call the public API directly with a valid `x-api-key`, or wrap the same endpoints in their own SDK or client.
 
 ## Install
 
@@ -66,7 +97,7 @@ If you prefer project-local installation, copy the same folder into:
 
 After installation, start a fresh Claude session if your client does not auto-refresh skills.
 
-## Current Scope
+## Current Public API Scope
 
 The shipped skill assumes AlphaEngine's public router currently exposes:
 - `GET /v1/families`
@@ -78,18 +109,12 @@ The shipped skill assumes AlphaEngine's public router currently exposes:
 - `POST /v1/families/strategy-arena/simulations`
 - `POST /v1/families/strategy-arena/evaluations`
 
-The skill assumes requests are authenticated with:
+Requests are authenticated with:
 - header: `x-api-key`
 
 The skill does **not** assume any public ranking endpoint exists.
 
-## How To Use The Skill
-
-Typical usage:
-1. point the agent at the AlphaEngine router base URL,
-2. provide a valid API key,
-3. ask it to explore the strategy arena,
-4. let it search, simulate, evaluate, and compare ideas.
+## Example Usage
 
 Example prompt:
 
@@ -104,6 +129,67 @@ For normal public usage, point the skill at the deployed AlphaEngine API endpoin
 The `http://localhost:8080` form is only for:
 - AlphaEngine maintainers,
 - contributors testing against a locally running `api-router`.
+
+## Example Evaluation Shape
+
+The skill is optimized around the current beta evaluation response shape.
+
+Typical outputs include:
+- `score`
+- `annualizedMeanReturn`
+- `maxDrawdown`
+- `cvar`
+- `turnover`
+- `executionCost`
+- `eligibility`
+- `capitalScore`
+
+Illustrative example:
+
+```json
+{
+  "score": 0.12574986621080966,
+  "annualizedMeanReturn": 0.13384547326881926,
+  "maxDrawdown": 0.0003996003996003769,
+  "cvar": 0.0003996003996003996,
+  "turnover": 0.023333333333333334,
+  "executionCost": 0.00005664601904857751,
+  "eligible": true
+}
+```
+
+In beta, the main leaderboard key is:
+- `evaluation.data.score`
+
+## Why Pendle
+
+Pendle is a yield-trading protocol built around tokenized principal and yield exposure.
+
+Useful context:
+- [Pendle Docs](https://docs.pendle.finance/)
+- [Pendle Yield Tokenization](https://docs.pendle.finance/pendle-v2/ProtocolMechanics/YieldTokenization/Minting)
+
+The skill uses a practical intuition:
+- **PT** behaves like the principal or zero-coupon leg,
+- **YT** behaves like the stripped yield or coupon leg,
+- Pendle opportunities often fall into `technical-analysis`, `convergence`, `relative-value`, `curve`, and `liquidity` categories.
+
+The full Pendle/PT/YT reasoning lives in:
+- [pendle-intuition.md](./skills/alphaengine-strategy-arena-agent/references/pendle-intuition.md)
+
+## Platform Compatibility
+
+This repo is designed around the shared skill layout both Codex and Claude understand:
+- one skill directory,
+- one `SKILL.md`,
+- optional `references/` files.
+
+The skill body is shared. There is no separate Codex-vs-Claude version of the strategy-arena skill.
+
+Platform-specific differences are limited to:
+- install location,
+- discovery/refresh behavior,
+- optional repo-level guidance files such as `AGENTS.md` and `CLAUDE.md`.
 
 ## Search Philosophy
 
