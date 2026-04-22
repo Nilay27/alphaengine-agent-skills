@@ -117,7 +117,7 @@ Requests are authenticated with:
 
 Current public arena assumptions:
 - callers discover `marketId` from `GET /v1/families/strategy-arena/markets`
-- callers do not submit raw `datasetRef` or dataset component ids
+- callers do not submit internal dataset or component identifiers; the server resolves them internally
 - callers may use `strategyParams: {}` when strategy metadata surfaces defaults
 - `simulations/summary` is the best default for broad sweeps and quick comparison
 - some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family

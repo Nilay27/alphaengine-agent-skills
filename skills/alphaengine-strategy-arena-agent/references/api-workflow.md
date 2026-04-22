@@ -66,7 +66,7 @@ Error responses use RFC 9457 problem details with AlphaEngine extensions such as
 - `capital`
 - `components`
 3. `marketId` is discovered from `GET /v1/families/strategy-arena/markets`.
-4. Callers do not submit raw `datasetRef` or dataset component ids in arena mode.
+4. Callers do not submit internal dataset or component identifiers in arena mode; the server resolves those internally.
 5. Callers may omit `executionConfig`; when supplied in arena mode it is ignored in favor of the server-owned execution profile.
 6. Strategy detail and parameter endpoints may surface canonical defaults. When they do, callers may use `strategyParams: {}` for baseline simulations.
 7. Some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family.

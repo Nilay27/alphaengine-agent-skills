@@ -42,7 +42,7 @@ Read `references/pendle-intuition.md` when:
 - Prefer `/simulations/summary` for broad sweeps and quick comparisons.
 - Use `/simulations/trades` when you need event-level trade and skipped-signal inspection.
 - Use full `/simulations` only when you need the full ledger and portfolio trace.
-- Current arena mode is server-owned: callers do not supply raw `datasetRef`, dataset component ids, or authoritative execution/scoring knobs.
+- Current arena mode is server-owned: callers submit only public simulation inputs and the server resolves dataset, component, execution, and scoring details internally.
 
 5. Evaluate.
 - Use the public evaluation endpoint after simulation.
@@ -66,8 +66,7 @@ Read `references/pendle-intuition.md` when:
 4. Do not treat this skill as a recipe book.
 5. Use score as the beta leaderboard key, not subjective preference.
 6. Use diagnostics to explain tradeoffs, not to override score without reason.
-7. Do not send raw `datasetRef` or dataset component ids in current arena mode.
-8. Do not assume caller-owned execution/scoring knobs are active in current arena mode.
+7. Do not assume caller-owned execution or scoring knobs are active in current arena mode.
 
 ## Current Arena Mode Assumptions
 
