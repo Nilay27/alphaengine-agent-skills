@@ -19,3 +19,16 @@
   - example evaluation block,
   - Pendle links and context,
   - clearer sectioning for public users.
+
+## 2026-04-22
+
+- Refreshed `alphaengine-strategy-arena-agent` to match the current public `api-router` arena contract.
+- Removed stale guidance that told users to submit raw `datasetRef` or caller-owned execution config.
+- Added current public response-view guidance for:
+  - `/simulations`,
+  - `/simulations/summary`,
+  - `/simulations/trades`.
+- Made market discovery explicit so first-time users know `marketId` comes from `GET /v1/families/strategy-arena/markets`.
+- Corrected evaluation examples to post `{ "simulation": simulation.data }`.
+- Documented current arena support caveat that some strategies still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` when the server dataset/profile lacks required feature families.
+

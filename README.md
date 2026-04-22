@@ -37,9 +37,9 @@ It is intentionally **not** a recipe book for guaranteed winners.
 With the current skill, an agent can:
 - enumerate the live strategy arena catalog,
 - inspect parameter schemas,
-- inspect available markets,
-- run simulation requests,
-- run evaluation requests,
+- inspect available markets and discover usable `marketId` values,
+- run compact, trade-focused, or full simulation requests,
+- run evaluation requests over returned simulation payloads,
 - sort candidates by `evaluation.data.score`,
 - explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility.
 
@@ -54,11 +54,12 @@ This is useful for:
 ```mermaid
 flowchart LR
     A[Agent] --> B[GET strategies]
-    B --> C[GET parameters + markets]
-    C --> D[POST simulations]
-    D --> E[POST evaluations]
-    E --> F[Sort by score]
-    F --> G[Refine promising candidates]
+    B --> C[GET strategy details + parameters]
+    C --> D[GET markets]
+    D --> E[POST simulations or simulations/summary]
+    E --> F[POST evaluations]
+    F --> G[Sort by score]
+    G --> H[Refine promising candidates]
 ```
 
 Public access terminates at AlphaEngine's deployed `api-router`.
@@ -107,10 +108,19 @@ The shipped skill assumes AlphaEngine's public router currently exposes:
 - `GET /v1/families/strategy-arena/strategies/{strategyId}/parameters`
 - `GET /v1/families/strategy-arena/markets`
 - `POST /v1/families/strategy-arena/simulations`
+- `POST /v1/families/strategy-arena/simulations/summary`
+- `POST /v1/families/strategy-arena/simulations/trades`
 - `POST /v1/families/strategy-arena/evaluations`
 
 Requests are authenticated with:
 - header: `x-api-key`
+
+Current public arena assumptions:
+- callers discover `marketId` from `GET /v1/families/strategy-arena/markets`
+- callers do not submit raw `datasetRef` or dataset component ids
+- callers may use `strategyParams: {}` when strategy metadata surfaces defaults
+- `simulations/summary` is the best default for broad sweeps and quick comparison
+- some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family
 
 The skill does **not** assume any public ranking endpoint exists.
 
@@ -119,7 +129,7 @@ The skill does **not** assume any public ranking endpoint exists.
 Example prompt:
 
 ```text
-Use the alphaengine-strategy-arena-agent skill against https://api.alphaengine.dev with my x-api-key.
+Use the alphaengine-strategy-arena-agent skill against https://api-router.alphaengine.trade with my x-api-key.
 Explore the Pendle yield strategy catalog, test broad categories first, then refine promising candidates.
 Optimize for evaluation.data.score and show the supporting diagnostics.
 ```
