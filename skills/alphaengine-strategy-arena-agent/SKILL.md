@@ -28,19 +28,25 @@ Read `references/pendle-intuition.md` when:
 - Read families.
 - Read strategy-arena metadata.
 - List strategies.
-- Inspect parameter schemas for candidates you plan to test.
+- Inspect strategy details and parameter schemas for candidates you plan to test.
 - Read markets before fixing a simulation hypothesis.
+- The current public simulation request requires `marketId`, so the agent must obtain it from `GET /v1/families/strategy-arena/markets`.
 
 3. Build broad initial hypotheses.
 - Start from multiple strategy categories.
 - Do not spend the first budget only on tiny parameter tweaks of one idea.
+- If strategy details surface defaults, treat `strategyParams: {}` as the baseline request shape rather than inventing arbitrary first-pass parameters.
 
 4. Simulate.
-- Use the public simulation endpoint to test concrete candidate requests.
-- Keep requests valid and explicit.
+- Use the public simulation endpoints to test concrete candidate requests.
+- Prefer `/simulations/summary` for broad sweeps and quick comparisons.
+- Use `/simulations/trades` when you need event-level trade and skipped-signal inspection.
+- Use full `/simulations` only when you need the full ledger and portfolio trace.
+- Current arena mode is server-owned: callers do not supply raw `datasetRef`, dataset component ids, or authoritative execution/scoring knobs.
 
 5. Evaluate.
 - Use the public evaluation endpoint after simulation.
+- Post `{"simulation": simulation.data}`.
 - Treat `evaluation.data.score` as the beta primary sort key.
 
 6. Compare with diagnostics.
@@ -50,6 +56,7 @@ Read `references/pendle-intuition.md` when:
 7. Refine without collapsing the search.
 - Narrow only after broad exploration.
 - Prefer robustness over one lucky score.
+- When a strategy fails with `STRATEGY_MISSING_REQUIRED_FEATURE`, treat that as “not runnable on the current arena dataset/profile” unless the user explicitly wants to investigate feature support.
 
 ## Hard Rules
 
@@ -59,6 +66,17 @@ Read `references/pendle-intuition.md` when:
 4. Do not treat this skill as a recipe book.
 5. Use score as the beta leaderboard key, not subjective preference.
 6. Use diagnostics to explain tradeoffs, not to override score without reason.
+7. Do not send raw `datasetRef` or dataset component ids in current arena mode.
+8. Do not assume caller-owned execution/scoring knobs are active in current arena mode.
+
+## Current Arena Mode Assumptions
+
+1. Public competition simulation is daily-only.
+2. The server resolves the official dataset internally.
+3. The server resolves the official execution profile internally.
+4. The server resolves the official scoring window internally.
+5. Strategy defaults may be surfaced publicly; when they are, `strategyParams: {}` is a valid baseline request shape.
+6. Some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family.
 
 ## Output Expectations
 
