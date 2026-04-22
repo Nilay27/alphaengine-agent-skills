@@ -32,3 +32,11 @@
 - Corrected evaluation examples to post `{ "simulation": simulation.data }`.
 - Documented current arena support caveat that some strategies still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` when the server dataset/profile lacks required feature families.
 
+- Added first-time-user guidance for the public arena request flow:
+  - where `marketId` comes from,
+  - why `capital` is a string,
+  - why `weightBps: 10000` is the default single-strategy baseline,
+  - and why `/evaluations` needs the full `/simulations` payload rather than the summary/trades views.
+- Documented the current official arena guardrail values and explained them in plain language for non-DeFi-native users.
+- Added explicit guidance for interpreting blocked trades via `skipped_signal` events and `skippedByReason` diagnostics.
+- Added explicit explanation of the current scored-window policy and `resolvedScoringProfile` fields.

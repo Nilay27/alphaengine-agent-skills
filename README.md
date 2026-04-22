@@ -36,10 +36,11 @@ It is intentionally **not** a recipe book for guaranteed winners.
 
 With the current skill, an agent can:
 - enumerate the live strategy arena catalog,
-- inspect parameter schemas,
+- inspect parameter schemas and surfaced defaults,
 - inspect available markets and discover usable `marketId` values,
 - run compact, trade-focused, or full simulation requests,
-- run evaluation requests over returned simulation payloads,
+- understand why signals may be skipped under the official arena guardrails,
+- run evaluation requests over full simulation payloads,
 - sort candidates by `evaluation.data.score`,
 - explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility.
 
@@ -117,9 +118,11 @@ Requests are authenticated with:
 
 Current public arena assumptions:
 - callers discover `marketId` from `GET /v1/families/strategy-arena/markets`
+- callers send `capital` as a decimal string and typically start with `weightBps: 10000` for single-strategy baselines
 - callers do not submit internal dataset or component identifiers; the server resolves them internally
 - callers may use `strategyParams: {}` when strategy metadata surfaces defaults
-- `simulations/summary` is the best default for broad sweeps and quick comparison
+- `simulations/summary` is the best default for broad sweeps and quick comparison, but `/evaluations` requires the full `/simulations` payload
+- the server-owned arena guardrails can block trades even when signals are present
 - some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family
 
 The skill does **not** assume any public ranking endpoint exists.
