@@ -14,7 +14,7 @@ The skill assumes the user provides:
 Example:
 
 ```text
-baseUrl = https://api.alphaengine.dev
+baseUrl = https://api-router.alphaengine.trade
 x-api-key = <real-api-key>
 ```
 

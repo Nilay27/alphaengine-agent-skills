@@ -129,7 +129,7 @@ The skill does **not** assume any public ranking endpoint exists.
 Example prompt:
 
 ```text
-Use the alphaengine-strategy-arena-agent skill against https://api.alphaengine.dev with my x-api-key.
+Use the alphaengine-strategy-arena-agent skill against https://api-router.alphaengine.trade with my x-api-key.
 Explore the Pendle yield strategy catalog, test broad categories first, then refine promising candidates.
 Optimize for evaluation.data.score and show the supporting diagnostics.
 ```
