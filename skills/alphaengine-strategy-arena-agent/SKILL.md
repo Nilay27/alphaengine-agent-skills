@@ -21,7 +21,7 @@ Read `references/pendle-intuition.md` when:
 ## Workflow
 
 1. Confirm router access.
-- You need a base URL and a valid `x-api-key`.
+- You need the public base URL and a valid `x-api-key`.
 - Use only the public HTTP API surface.
 
 2. Enumerate the current search space.
@@ -36,27 +36,30 @@ Read `references/pendle-intuition.md` when:
 - Start from multiple strategy categories.
 - Do not spend the first budget only on tiny parameter tweaks of one idea.
 - If strategy details surface defaults, treat `strategyParams: {}` as the baseline request shape rather than inventing arbitrary first-pass parameters.
+- For a single-strategy baseline, use `weightBps = 10000`.
 
 4. Simulate.
 - Use the public simulation endpoints to test concrete candidate requests.
-- Prefer `/simulations/summary` for broad sweeps and quick comparisons.
+- Prefer `/simulations/summary` for broad sweeps and quick comparison.
 - Use `/simulations/trades` when you need event-level trade and skipped-signal inspection.
-- Use full `/simulations` only when you need the full ledger and portfolio trace.
+- Use full `/simulations` when you need the full ledger and portfolio trace or when you plan to run `/evaluations` next.
 - Current arena mode is server-owned: callers submit only public simulation inputs and the server resolves dataset, component, execution, and scoring details internally.
 
 5. Evaluate.
-- Use the public evaluation endpoint after simulation.
-- Post `{"simulation": simulation.data}`.
+- Use the public evaluation endpoint only after a full simulation call.
+- Post `{"simulation": simulation.data}` from the full `/simulations` response.
+- Do not post `/simulations/summary` or `/simulations/trades` payloads to `/evaluations`.
 - Treat `evaluation.data.score` as the beta primary sort key.
 
 6. Compare with diagnostics.
 - Check score first.
 - Then inspect annualized return, drawdown, CVaR, turnover, execution cost, and eligibility.
+- If a strategy produced signals but no trades, inspect skipped-signal diagnostics rather than assuming the strategy is broken.
 
 7. Refine without collapsing the search.
 - Narrow only after broad exploration.
 - Prefer robustness over one lucky score.
-- When a strategy fails with `STRATEGY_MISSING_REQUIRED_FEATURE`, treat that as “not runnable on the current arena dataset/profile” unless the user explicitly wants to investigate feature support.
+- When a strategy fails with `STRATEGY_MISSING_REQUIRED_FEATURE`, treat that as a current arena support gap rather than a malformed request.
 
 ## Hard Rules
 
@@ -84,4 +87,4 @@ When using this skill, produce:
 2. simulation/evaluation results for each candidate,
 3. the top candidates sorted by `score`,
 4. a short explanation of why the leading candidates are strong,
-5. obvious caveats such as high turnover, poor eligibility, or fragile diagnostics.
+5. obvious caveats such as high turnover, poor eligibility, blocked trades, or fragile diagnostics.
