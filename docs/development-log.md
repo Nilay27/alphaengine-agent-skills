@@ -1,5 +1,14 @@
 # Development Log
 
+## 2026-04-26
+
+- Updated `alphaengine-strategy-arena-agent` for arena-final market and scoring behavior.
+- Clarified that live markets must be discovered from `GET /v1/families/strategy-arena/markets`; expected beta market keys may include `susde`, `susdf`, and `ghousd`, but numeric IDs are not stable guidance.
+- Replaced stale "last 30 bars" scoring-window guidance with server-owned scoring-profile guidance for 30 warmup bars plus roughly 60 scored/evaluation bars.
+- Added Final Strategy Output Mode for "give me a strategy" and similar submit-intent requests.
+- Documented minimal paste-ready dashboard JSON and the UI's self-validating defaults for `marketKey`, `timeframe`, and `config`.
+- Clarified that `evaluation.data.score` is the scaled public leaderboard score while raw utility remains diagnostic.
+
 ## 2026-04-16
 
 - Initialized `alphaengine-agent-skills` as a public GitHub-installable skill repo.

@@ -42,7 +42,8 @@ With the current skill, an agent can:
 - understand why signals may be skipped under the official arena guardrails,
 - run evaluation requests over full simulation payloads,
 - sort candidates by `evaluation.data.score`,
-- explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility.
+- explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility,
+- return paste-ready strategy JSON for `beta.alphaengine.trade` when a user asks what to submit.
 
 This is useful for:
 - fast exploration of Pendle yield strategies,
@@ -118,11 +119,13 @@ Requests are authenticated with:
 
 Current public arena assumptions:
 - callers discover `marketId` from `GET /v1/families/strategy-arena/markets`
+- numeric `marketId` values are deployment config, so agents should not hardcode them
 - callers send `capital` as a decimal string and typically start with `weightBps: 10000` for single-strategy baselines
 - callers do not submit internal dataset or component identifiers; the server resolves them internally
 - callers may use `strategyParams: {}` when strategy metadata surfaces defaults
 - `simulations/summary` is the best default for broad sweeps and quick comparison, but `/evaluations` requires the full `/simulations` payload
 - the server-owned arena guardrails can block trades even when signals are present
+- dashboard paste-ready strategy JSON may be minimal; the UI can fill `marketKey`, `timeframe`, and `config`
 - some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family
 
 The skill does **not** assume any public ranking endpoint exists.
@@ -161,7 +164,10 @@ Illustrative example:
 
 ```json
 {
-  "score": 0.12574986621080966,
+  "score": 12.575,
+  "scenarioResult": {
+    "utilityScore": 0.12574986621080966
+  },
   "annualizedMeanReturn": 0.13384547326881926,
   "maxDrawdown": 0.0003996003996003769,
   "cvar": 0.0003996003996003996,
@@ -173,6 +179,8 @@ Illustrative example:
 
 In beta, the main leaderboard key is:
 - `evaluation.data.score`
+
+The public score is scaled for leaderboard display. Raw utility remains a diagnostic under the scenario result.
 
 ## Why Pendle
 

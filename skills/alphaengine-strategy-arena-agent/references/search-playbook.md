@@ -59,3 +59,15 @@ If a leaderboard or top-candidate list is needed in beta:
 - sort by `evaluation.data.score`
 - display diagnostics alongside it
 - do not introduce cross-submission penalty logic unless the public API explicitly adds it
+
+## Final Recommendation Rule
+
+When the user asks for a final or submit-ready strategy, stop the exploratory report format and return a concise recommendation with paste-ready dashboard JSON.
+
+Use minimal JSON by default:
+- `components`
+- `strategyId`
+- `weightBps`
+- `strategyParams`
+
+Only include `marketKey`, `timeframe`, and `config` when the user asks for the full object or when pinning those values prevents ambiguity.

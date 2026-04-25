@@ -70,6 +70,7 @@ Error responses use RFC 9457 problem details with AlphaEngine extensions such as
 - `capital`
 - `components`
 3. `marketId` is discovered from `GET /v1/families/strategy-arena/markets`.
+   Do not assume numeric IDs are stable across deployments.
 4. `timeframe` should be sent as `"daily"` for clarity.
 5. `capital` must be sent as a decimal string, for example `"100000"`, not as a JSON number.
 6. `components` is an array of strategy sleeves. For a single-strategy baseline, use one component with `weightBps: 10000`.
@@ -78,6 +79,73 @@ Error responses use RFC 9457 problem details with AlphaEngine extensions such as
 9. Callers may omit `executionConfig`; when supplied in arena mode it is ignored in favor of the server-owned execution profile.
 10. `submissionId` is optional correlation metadata only; it does not make simulations idempotent.
 11. Some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family.
+
+## Dashboard Paste-Ready Strategy JSON
+
+Dashboard submissions are not the same shape as public API simulation requests.
+
+For API exploration, use `marketId` and `capital`. For beta dashboard paste-ready output, use `marketKey` when you need to pin a market, or omit it and let the UI fill the selected/default market.
+
+When the user asks for a final strategy or anything submit-ready, prefer minimal JSON:
+
+```json
+{
+  "components": [
+    {
+      "strategyId": "roll-down-capture",
+      "weightBps": 10000,
+      "strategyParams": {
+        "field": "logYield",
+        "minDaysToExpiry": 0,
+        "maxDaysToExpiry": 1000,
+        "volWindow": 10,
+        "maxYieldVol": 0.01
+      }
+    }
+  ]
+}
+```
+
+The UI self-validates and fills defaults such as:
+- `marketKey`
+- `timeframe`
+- `config`
+
+If a full object is requested or needed, use this dashboard shape:
+
+```json
+{
+  "marketKey": "susdf",
+  "timeframe": "daily",
+  "components": [
+    {
+      "strategyId": "roll-down-capture",
+      "weightBps": 10000,
+      "strategyParams": {
+        "field": "logYield",
+        "minDaysToExpiry": 0,
+        "maxDaysToExpiry": 1000,
+        "volWindow": 10,
+        "maxYieldVol": 0.01
+      }
+    }
+  ],
+  "config": {
+    "initialEquity": 100000,
+    "fillRule": "close",
+    "feeBps": 3,
+    "slippageBps": 2,
+    "slippageModel": {
+      "type": "fixed_bps",
+      "bps": 2
+    },
+    "maxAbsPosition": 1,
+    "initialPosition": 0
+  }
+}
+```
+
+Do not describe dashboard `config` as overriding the official public competition execution profile. Treat it as dashboard-compatible submission shape; server-owned arena scoring/execution remains authoritative.
 
 ## Strategy Discovery Sequence
 
@@ -155,12 +223,14 @@ If a strategy produces signals but few or zero trades, that often means the offi
 Current public arena scoring is server-owned.
 
 The current policy is:
-- the full dataset is used for signal warmup
-- the scored window is the last 30 bars, or the full dataset if it is shorter than 30 bars
+- the server resolves warmup and scoring internally
+- current arena-final daily packs use 30 warmup bars and roughly 60 scored/evaluation bars
+- short synthetic fixtures may still be fully scored
 
 Important interpretation points:
 - full simulation traces may include warmup bars before the scored window
 - evaluation trims to the scored window internally
+- do not hardcode 30, 60, or 61 scored bars in client logic
 - `resolvedScoringProfile` tells you:
   - `totalBars`
   - `warmupBars`
@@ -173,6 +243,8 @@ Important interpretation points:
 
 For strategy comparisons in beta:
 - primary sort key: `evaluation.data.score`
+- `evaluation.data.score` is the public scaled leaderboard score
+- raw utility remains available as a diagnostic under the scenario result, for example `scenarioResult.utilityScore`
 
 Important diagnostics to inspect alongside score:
 - `annualizedMeanReturn`
@@ -231,6 +303,8 @@ curl -s "$BASE_URL/v1/families/strategy-arena/simulations/summary" \
     ]
   }'
 ```
+
+`marketId: 1` is illustrative. Always read markets first and use the live `marketId` for the intended `marketKey`.
 
 Run a full simulation for one shortlisted candidate:
 
