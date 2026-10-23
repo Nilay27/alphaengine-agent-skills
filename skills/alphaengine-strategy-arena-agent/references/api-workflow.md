@@ -11,6 +11,14 @@ The previously advertised `https://api-router.alphaengine.trade` failed DNS reso
 
 Use an environment variable or the host's secret mechanism for the key; never ask the user to paste it into chat, embed it in files or log it. Send it only to the confirmed router origin, not to the BFF GETs. Do not forward credentials across redirects.
 
+### Obtaining or Replacing the User's Key
+
+- When compute needs a key and none is configured, provide [AlphaEngine API-key settings](https://beta.alphaengine.trade/#profile/api-key). The direct route opens Profile -> Settings -> API keys; the user signs in themselves if needed. On a dashboard version predating this route, follow those tabs manually.
+- With no active key, click **Generate**, then **Copy** and save it in the agent host's secure secret/configuration input (for example `ALPHAENGINE_API_KEY`). Ask the user to complete that setup and then resume. Do not ask for the value in ordinary chat or automate their login.
+- The full key is shown only when generated and cannot be retrieved later. If hidden, keep using an already saved valid key. If it was not saved or is invalid, the user can click **Regenerate** anytime, copy the replacement once, and update the configuration to continue.
+- Only one key is active per account. Regenerating replaces the old key immediately; every agent, script or service using the old value must be updated. **Disable Key** revokes access. Do not regenerate a working saved key merely because the dashboard masks it.
+- For `AUTH_INVALID_API_KEY`, first check the local configuration has the full key rather than the masked prefix. If still rejected, link the user to the same settings to regenerate and securely configure the replacement. Missing keys need setup; DNS/network failures, 429 limits and missing-scope errors have different remedies below and should not trigger key rotation.
+
 ### Public BFF Market Reads
 
 | Method and path | Purpose |
@@ -189,7 +197,7 @@ Use dashboard shape, not the public API request: `marketKey`, `timeframe`, and `
 
 ## Failures and Bounded Retries
 
-- `401` / `AUTH_MISSING_API_KEY` / `AUTH_INVALID_API_KEY`: stop compute and request secure key setup/correction, not repeated retries.
+- `401` / `AUTH_MISSING_API_KEY` / `AUTH_INVALID_API_KEY`: stop compute and follow the setup/replacement section above. Link the user to API-key settings, explain that regeneration replaces the old key, and resume only after they securely configure the full new value. Do not repeatedly retry the rejected key or rotate it automatically.
 - `403` / `AUTH_INACTIVE_API_KEY` / `AUTH_INSUFFICIENT_SCOPE`: stop and explain the permission required.
 - `429` / `RATE_LIMIT_EXCEEDED` or `RATE_LIMIT_CONCURRENCY_EXCEEDED`: inspect `Retry-After` and `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`. They accompany rejections; do not assume every success contains them. Honour the wait, pace the shared queue, and allow at most three retries of an otherwise valid request within the time budget. Stop if it remains blocked. An over-budget request must change before retrying.
 - `REQUEST_VALIDATION_FAILED`: fix the structured `fieldErrors` (router) or `error.details` (BFF) before another attempt.

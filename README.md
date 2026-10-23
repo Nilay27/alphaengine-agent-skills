@@ -157,6 +157,8 @@ Choose a finite task budget: up to 100 unique simulations is a reasonable initia
 
 ## Example Usage
 
+Get a key at [Profile -> Settings -> API keys](https://beta.alphaengine.trade/#profile/api-key), signing in first if needed. If the direct route is not yet available in your deployed dashboard version, open those tabs manually. Generate and copy the full key once into your agent's secure configuration; it cannot be revealed later. If you lose it, regenerate anytime: **only one key is active per account, and the replacement immediately invalidates the old key**. Update all agents/integrations using it. The skill links this page when compute has a missing/invalid key; network and rate-limit failures do not require regeneration.
+
 Example prompt:
 
 ```text

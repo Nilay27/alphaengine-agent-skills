@@ -2,6 +2,7 @@
 
 ## 2026-10-23
 
+- Added direct API-key onboarding at `https://beta.alphaengine.trade/#profile/api-key` (with manual Profile -> Settings -> API keys fallback for older dashboard releases). Documented one-time copying, regeneration for an unsaved/invalid key, immediate replacement of the single active account key, and updating every integration. Invalid-key guidance links this setup view and resumes after secure configuration; network, quota and scope failures retain their own remedies. No recoverable-key/reveal backend is required. Paired dashboard coverage passes eight focused tests, type checking/build and signed-out in-app Browser checks; refreshed skill structure/reference/JSON/shell and diff checks pass locally.
 - Updated the shared skill and all three references for current hourly/daily arena support, explicit timeframe output, returned dataset/execution/scoring profiles, and server-owned computation.
 - Added existing anonymous BFF market catalog/series GETs, fetch-once temporary caching, snapshot-aware result reuse and ordered candidate deduplication. Kept API keys restricted to the confirmed authenticated router origin.
 - Documented current default compute costs (50 CU/second, reads/evaluations 1 CU, simulation 10 CU/component), concurrency ceilings (2 simulations/4 evaluations), fixed-window/per-process accounting, five-component constraints and bounded typed-error retry handling.
