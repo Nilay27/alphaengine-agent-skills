@@ -40,6 +40,15 @@ Useful categories include:
 High turnover can destroy otherwise attractive raw-return ideas.
 Do not optimize only for return.
 
+## Interpreting the Cached Market Series
+
+- Identify the instrument before interpreting a chart. These arena markets use Pendle PT market data; explaining YT does not imply the simulation is trading YT or a generic spot token.
+- The public chart exposes OHLCV price fields and a separate `apy` field. Price changes and implied-yield/APY changes are different observations; check field units and metadata rather than presenting APY as token price or assuming a display percentage convention.
+- Use the cached observation period to discuss trends, ranges, volatility and volume. These are historical snapshots, not guaranteed live quotes. Do not infer current liquidity, spreads or pool depth from volume alone; discuss liquidity only when the returned data/profile supports it.
+- A rising implied yield is not automatically a rising PT price. Expiry, redemption denomination and the yield convention matter; explain the relationship qualitatively unless the inputs support a calculation.
+- Keep 1H and 1D analysis explicit. A lookback or holding period in bars spans different elapsed time on each timeframe, and the official scoring window excludes the warmup specified in the response.
+- Treat momentum, mean reversion, convergence and other categories as hypotheses motivated by observations, not certain winners. Only simulations/evaluations establish the tested score.
+
 ## Evaluation Metrics To Respect
 
 For beta exploration, agents should inspect:

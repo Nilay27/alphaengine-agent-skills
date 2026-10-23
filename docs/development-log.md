@@ -1,5 +1,15 @@
 # Development Log
 
+## 2026-10-23
+
+- Updated the shared skill and all three references for current hourly/daily arena support, explicit timeframe output, returned dataset/execution/scoring profiles, and server-owned computation.
+- Added existing anonymous BFF market catalog/series GETs, fetch-once temporary caching, snapshot-aware result reuse and ordered candidate deduplication. Kept API keys restricted to the confirmed authenticated router origin.
+- Documented current default compute costs (50 CU/second, reads/evaluations 1 CU, simulation 10 CU/component), concurrency ceilings (2 simulations/4 evaluations), fixed-window/per-process accounting, five-component constraints and bounded typed-error retry handling.
+- Replaced the automatic summary-then-full search path with saved full simulation/evaluation reuse when comparing official scores; summary/trades remain available when those views alone are needed.
+- Added flexible market-informed exploration, combinations, deeper refinement, sensitivity checks and finite task budgets, without a prescribed winning recipe. Final recommendations pin tested market/timeframe and disclose trial counts, diagnostics and limits.
+- Updated README capabilities, examples and workflow. Documented the previously reported router-hostname DNS failure as an unresolved connectivity prerequisite; no backend, DNS, deployment or installed skill copies were changed.
+- Validation: checked endpoint/auth/response examples against `api-router/src/routes/`, `src/contracts/v1/strategyArena.ts`, `src/middleware/`, `src/rateLimit/`, BFF `src/createServer.ts` and `src/services/dashboardCompatService.ts`, and `simulation-service/src/arena/officialArena.ts`. Passed the skill validator using cached PyYAML, local-reference/JSON/shell-syntax checks, and eight offline HTTP-example fixture flows covering hourly/daily success and stopping on transport, catalog, availability, duplicate-ID and simulation-response failures. Verified saved-payload evaluation and credential separation without live compute, network calls or real keys; `git diff --check` passed.
+
 ## 2026-04-26
 
 - Updated `alphaengine-strategy-arena-agent` for arena-final market and scoring behavior.

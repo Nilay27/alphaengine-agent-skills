@@ -1,91 +1,63 @@
 ---
 name: alphaengine-strategy-arena-agent
-description: Use AlphaEngine's public strategy-arena API to explore Pendle yield strategies, run simulations and evaluations, refine candidate ideas without converging on one canned recipe, or produce paste-ready beta strategy JSON when a user asks for a final strategy, submission, best strategy, or JSON to submit. Use when an agent should query the public AlphaEngine router directly with an API key and search for promising strategies or combinations.
+description: Explore AlphaEngine Pendle markets and hourly or daily strategies through public APIs. Use for market explanations, bounded simulation and evaluation searches, or paste-ready beta strategy JSON. Analyse cached market data and refine diverse candidates without prescribing one winning recipe.
 ---
 
 # AlphaEngine Strategy Arena Agent
 
-Use this skill when an agent should work against AlphaEngine's public `strategy-arena` API.
+Use public AlphaEngine HTTP surfaces for market understanding and strategy exploration.
 
-## Required Context
+## Choose the Work Needed
 
-Read these files first:
-1. `references/api-workflow.md`
-2. `references/search-playbook.md`
-
-Read `references/pendle-intuition.md` when:
-- selecting initial hypotheses,
-- explaining why a category may matter,
-- or reasoning about PT/YT behavior and Pendle-specific opportunity structure.
+- For general explanations, answer without network requests when current data is unnecessary. Read [Pendle intuition](references/pendle-intuition.md) as needed.
+- For a particular market's behaviour, read the public GET/caching sections of [API workflow](references/api-workflow.md), fetch only the missing catalog/series and analyse the cached observations. Do not automatically start a simulation search.
+- For strategy recommendations, read [API workflow](references/api-workflow.md) for endpoints, auth, caching, compute costs and failures, then [search playbook](references/search-playbook.md) for adaptive exploration.
 
 ## Workflow
 
-1. Confirm router access.
-- You need the public base URL and a valid `x-api-key`.
-- Use only the public HTTP API surface.
+1. Establish the task and access.
+   - Respect the requested market, timeframe and effort. Both `hourly` (1H) and `daily` (1D) are supported; hourly is the server default. Send the selected timeframe explicitly.
+   - Public BFF market GETs need no key. Simulations/evaluations use a confirmed public router base URL and the user's `x-api-key`; follow the API reference's connectivity checks and credential boundaries.
 
-2. Enumerate the current search space.
-- Read families.
-- Read strategy-arena metadata.
-- List strategies.
-- Inspect strategy details and parameter schemas for candidates you plan to test.
-- Read markets before fixing a simulation hypothesis.
-- The current public simulation request requires `marketId`, so the agent must obtain it from `GET /v1/families/strategy-arena/markets`.
-- Do not hardcode `marketId` values. For user-facing dashboard output, map the chosen market to `marketKey` if you decide to include it.
+2. Discover only what is needed and cache it.
+   - Read the market catalog once when discovery is needed; obtain router `marketId` values rather than hardcoding IDs.
+   - Fetch a historical series once per selected market/timeframe, save the complete response in a temporary directory, and reuse it throughout the search. No market GET inside candidate loops.
+   - Cache strategy metadata and parameter schemas too. Fetch details for candidates you plan to test, not every detail on every iteration.
+   - Retain dataset/snapshot metadata and observation dates. Refresh only for missing data, another market/timeframe, an explicit update, or evidence that the dataset changed; keep different snapshots separate.
 
-3. Build broad initial hypotheses.
-- Start from multiple strategy categories.
-- Do not spend the first budget only on tiny parameter tweaks of one idea.
-- If strategy details surface defaults, treat `strategyParams: {}` as the baseline request shape rather than inventing arbitrary first-pass parameters.
-- For a single-strategy baseline, use `weightBps = 10000`.
+3. Form market-specific hypotheses.
+   - Analyse the cached market's price/yield behaviour and available context before selecting candidates. Distinguish historical observations from live prices and PT price from implied yield/APY.
+   - Broad exploration of plausible categories, simple baselines, combinations and deeper refinement is useful guidance, not an exact required algorithm or fixed recipe.
+   - Do not assume recent market strength implies the highest strategy score, or eliminate entire categories solely from a trend label.
 
-4. Simulate.
-- Use the public simulation endpoints to test concrete candidate requests.
-- Prefer `/simulations/summary` for broad sweeps and quick comparison.
-- Use `/simulations/trades` when you need event-level trade and skipped-signal inspection.
-- Use full `/simulations` when you need the full ledger and portfolio trace or when you plan to run `/evaluations` next.
-- Current arena mode is server-owned: callers submit only public simulation inputs and the server resolves dataset, component, execution, and scoring details internally.
+4. Search within a finite budget.
+   - State a budget suited to the request; up to 100 unique simulations across the task is a reasonable initial search, not a server quota or a target that must be exhausted.
+   - Start with one simulation in flight, pace all authenticated requests within the shared compute budget, and deduplicate tested requests. See the API reference for exact limits.
+   - Use surfaced defaults (`strategyParams: {}` when supported) for initial baselines; a single component has `weightBps: 10000`.
+   - When comparing official scores, run full `/simulations` once per candidate, save the response, then post `{ "simulation": simulation.data }` to `/evaluations`.
+   - Full, summary and trades views have the same simulation compute cost. Use compact views only when their diagnostics suffice; do not rerun identical work just to switch views.
 
-5. Evaluate.
-- Use the public evaluation endpoint only after a full simulation call.
-- Post `{"simulation": simulation.data}` from the full `/simulations` response.
-- Do not post `/simulations/summary` or `/simulations/trades` payloads to `/evaluations`.
-- Treat `evaluation.data.score` as the beta primary sort key. It is the public scaled leaderboard score; raw utility remains a diagnostic under the scenario result.
-
-6. Compare with diagnostics.
-- Check score first.
-- Then inspect annualized return, drawdown, CVaR, turnover, execution cost, and eligibility.
-- If a strategy produced signals but no trades, inspect skipped-signal diagnostics rather than assuming the strategy is broken.
-
-7. Refine without collapsing the search.
-- Narrow only after broad exploration.
-- Prefer robustness over one lucky score.
-- When a strategy fails with `STRATEGY_MISSING_REQUIRED_FEATURE`, treat that as a current arena support gap rather than a malformed request.
+5. Compare and refine adaptively.
+   - Sort tested candidates by `evaluation.data.score`, then explain drawdown, CVaR, turnover, costs, eligibility and skipped-trade diagnostics.
+   - Explore combinations and parameter neighbourhoods where results justify more work, while retaining alternative hypotheses. Test nearby variations to identify fragile outliers.
+   - Stop at the chosen budget, sufficient evidence, diminishing improvements or a blocking failure. Go deeper when the user's requested effort supports it; never start an unbounded loop.
+   - Report typed errors and incomplete searches honestly. Honour bounded rate-limit retries; do not repeatedly retry invalid, unsupported or inherently over-budget requests.
 
 ## Final Strategy Output Mode
 
-Use this mode whenever the user asks for a submit-ready idea, including phrasing like:
-- "give me a strategy",
-- "give me a submission",
-- "what should I submit",
-- "final strategy",
-- "best strategy",
-- "pasteable JSON",
-- "strategy for beta",
-- "give me the JSON",
-- "ready to submit",
-- "what should I put in AlphaEngine".
+When the user asks what to submit, for the best strategy found, or for paste-ready JSON, return:
 
-In this mode, produce:
-1. a short rationale,
-2. the recommended market in text when relevant,
-3. one fenced `json` block,
-4. an instruction to paste the JSON into `beta.alphaengine.trade`, click simulate, review the UI-filled defaults, and submit.
+1. the selected market/timeframe, best tested score and a short rationale;
+2. the number of unique simulations performed and material limitations;
+3. one dashboard-compatible JSON block with the tested `marketKey` and `timeframe` pinned;
+4. an instruction to paste it into `beta.alphaengine.trade`, simulate, review and submit themselves.
 
-Prefer minimal dashboard JSON unless the user asks for a full object or the market/defaults must be pinned:
+Illustrative shape only; discover the market and validate strategy parameters before recommending it:
 
 ```json
 {
+  "marketKey": "susde",
+  "timeframe": "hourly",
   "components": [
     {
       "strategyId": "yield-rsi",
@@ -96,36 +68,17 @@ Prefer minimal dashboard JSON unless the user asks for a full object or the mark
 }
 ```
 
-The beta UI self-validates and can fill `marketKey`, `timeframe`, and `config` when omitted. If you include a full object, use dashboard shape (`marketKey`, `timeframe`, `components`, `config`), not the public API simulation shape (`marketId`, `capital`).
+Use the selected `daily` timeframe instead when that is what was tested. Each component needs `strategyId`, `weightBps` and `strategyParams`; weights must sum to `10000`. The dashboard can fill `config`; do not invent settings that suggest overriding the official server-owned profile. API request fields (`marketId`, string `capital`) are distinct from dashboard JSON.
 
 ## Hard Rules
 
-1. Do not invent unsupported endpoints.
-2. Do not assume a public ranking endpoint exists.
-3. Do not claim one category is always superior.
-4. Do not treat this skill as a recipe book.
-5. Use score as the beta leaderboard key, not subjective preference.
-6. Use diagnostics to explain tradeoffs, not to override score without reason.
-7. Do not assume caller-owned execution or scoring knobs are active in current arena mode.
-8. In Final Strategy Output Mode, ensure component `weightBps` values sum to `10000` and each component includes `strategyId`, `weightBps`, and `strategyParams`.
+- Use documented public endpoints only. No private/operator modules, wallet signing or automatic on-chain submission.
+- Keep API keys out of prompts, repository files, URLs and cached responses; send them only to the confirmed router origin.
+- Official datasets, execution and scoring profiles remain server-owned. Cached chart analysis is hypothesis generation, not a replacement official score.
+- Both timeframes use their returned `resolvedDataset`, `resolvedExecutionProfile` and `resolvedScoringProfile`; do not hardcode scoring windows or treat hourly bars as days.
+- Do not invent a cross-submission ranking API or a new scoring formula. Public BFF market reads supplement the authenticated router workflow.
+- Do not present one category or parameter set as universally superior. Say "best among the candidates tested", with no guarantee of future performance.
 
-## Current Arena Mode Assumptions
+## Exploratory Output
 
-1. Public competition simulation is daily-only.
-2. The server resolves the official dataset internally.
-3. The server resolves the official execution profile internally.
-4. The server resolves the official scoring window internally.
-5. Strategy defaults may be surfaced publicly; when they are, `strategyParams: {}` is a valid baseline request shape.
-6. Some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family.
-7. Current beta markets may include `susde`, `susdf`, and `ghousd`, but agents must discover live markets from the API because IDs and availability can change.
-
-## Output Expectations
-
-For exploratory use, produce:
-1. the tested hypothesis set,
-2. simulation/evaluation results for each candidate,
-3. the top candidates sorted by `score`,
-4. a short explanation of why the leading candidates are strong,
-5. obvious caveats such as high turnover, poor eligibility, blocked trades, or fragile diagnostics.
-
-For final strategy requests, switch to Final Strategy Output Mode and keep the answer centered on the paste-ready dashboard JSON.
+Summarise the hypotheses, dataset period, trials used, top scored candidates, diagnostics and what deeper work might resolve. Keep complete per-candidate results in temporary files rather than flooding the answer. If connectivity or authentication blocks computation, offer only clearly labelled market analysis or untested ideas, not fabricated scores.

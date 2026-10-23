@@ -16,6 +16,7 @@ This repo publishes shared public agent skills for AlphaEngine.
 The first live skill, `alphaengine-strategy-arena-agent`, teaches agents how to:
 - query AlphaEngine's public `api-router`,
 - explore the Pendle yield strategy catalog,
+- analyse cached market snapshots on hourly or daily timelines,
 - run simulations and evaluations,
 - compare candidates using the beta scoring model,
 - search broadly without collapsing everyone onto the same canned ideas.
@@ -38,6 +39,7 @@ With the current skill, an agent can:
 - enumerate the live strategy arena catalog,
 - inspect parameter schemas and surfaced defaults,
 - inspect available markets and discover usable `marketId` values,
+- fetch public historical market data only when needed and reuse it locally,
 - run compact, trade-focused, or full simulation requests,
 - understand why signals may be skipped under the official arena guardrails,
 - run evaluation requests over full simulation payloads,
@@ -55,18 +57,19 @@ This is useful for:
 
 ```mermaid
 flowchart LR
-    A[Agent] --> B[GET strategies]
-    B --> C[GET strategy details + parameters]
-    C --> D[GET markets]
-    D --> E[POST simulations or simulations/summary]
-    E --> F[POST evaluations]
-    F --> G[Sort by score]
-    G --> H[Refine promising candidates]
+    A[User question] --> B[Use cached context or fetch missing market data once]
+    B --> C[Explain market or form diverse hypotheses]
+    C --> D[Bounded search using cached catalogs and parameters]
+    D --> E[POST full simulation once per new candidate]
+    E --> F[POST evaluation using saved simulation]
+    F --> G[Compare scores and diagnostics]
+    G --> H[Adapt combinations and refine within budget]
+    H --> D
 ```
 
-Public access terminates at AlphaEngine's deployed `api-router`.
+This diagram illustrates a search, not a mandatory sequence for every question. General explanations need no network calls or simulation; market analysis uses the public BFF GETs only as needed. Simulation and evaluation use the authenticated public `api-router`.
 
-The skill does **not** require the thin client. Users can call the public API directly with a valid `x-api-key`, or wrap the same endpoints in their own SDK or client.
+The skill does **not** require the thin client. Use a confirmed reachable router base URL and a valid `x-api-key` for compute. The previously advertised `https://api-router.alphaengine.trade` failed DNS resolution in the October 2026 client check; this instruction update does not deploy or repair that hostname. Report connectivity failures and obtain the correct public base rather than bypassing authentication through dashboard POSTs.
 
 ## Install
 
@@ -114,8 +117,15 @@ The shipped skill assumes AlphaEngine's public router currently exposes:
 - `POST /v1/families/strategy-arena/simulations/trades`
 - `POST /v1/families/strategy-arena/evaluations`
 
-Requests are authenticated with:
+All listed `/v1` requests are authenticated with:
 - header: `x-api-key`
+
+For historical market analysis, the skill additionally uses these existing anonymous GETs at `https://beta.alphaengine.trade`:
+
+- `GET /api/app/markets`
+- `GET /api/app/market-series?marketKey={key}&timeframe=hourly` (or `daily`)
+
+Fetch the catalog once when needed and each relevant market/timeframe series once per search; save successful responses and snapshot metadata in a temporary directory. Reuse them for local analysis and candidate generation. Fetch again only for missing/corrupt data, another market/timeframe, an explicit refresh or a detected dataset change. These BFF reads have no per-user BFF HTTP limiter; this is agent guidance, not an enforced quota. Never send the API key with these reads.
 
 Current public arena assumptions:
 - callers discover `marketId` from `GET /v1/families/strategy-arena/markets`
@@ -123,20 +133,35 @@ Current public arena assumptions:
 - callers send `capital` as a decimal string and typically start with `weightBps: 10000` for single-strategy baselines
 - callers do not submit internal dataset or component identifiers; the server resolves them internally
 - callers may use `strategyParams: {}` when strategy metadata surfaces defaults
-- `simulations/summary` is the best default for broad sweeps and quick comparison, but `/evaluations` requires the full `/simulations` payload
+- both `hourly` (1H) and `daily` (1D) are supported; send the chosen timeframe explicitly, and read returned dataset/execution/scoring profiles rather than assuming fixed warmup/scoring windows
+- for official score comparisons, save a full `/simulations` result and pass its `simulation.data` to `/evaluations`; summary/trades views cost the same simulation CU and cannot be evaluated directly
 - the server-owned arena guardrails can block trades even when signals are present
-- dashboard paste-ready strategy JSON may be minimal; the UI can fill `marketKey`, `timeframe`, and `config`
+- dashboard recommendations pin the tested `marketKey` and `timeframe`, retain tested components/parameters, and use weights summing to `10000`; the UI can fill `config`
 - some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family
 
 The skill does **not** assume any public ranking endpoint exists.
+
+### Default Compute Limits
+
+| Operation or limit | Default |
+|---|---:|
+| Shared budget per API key | 50 CU per fixed one-second window |
+| Authenticated GET | 1 CU |
+| Simulation, any view | 10 CU per component |
+| Evaluation | 1 CU |
+| Concurrent simulations / evaluations | 2 / 4 |
+
+Limits currently operate per key within each router process, with no daily quota from this limiter; configured key-specific limits may differ. A three-component simulation plus evaluation costs 31 CU. Five components consume 50 CU, so the evaluation needs a later window; more than five cannot fit a default single request. Start with one simulation in flight, pace the shared queue, deduplicate candidates, and honour bounded `Retry-After` handling. See [API workflow](./skills/alphaengine-strategy-arena-agent/references/api-workflow.md) for details and failure codes.
+
+Choose a finite task budget: up to 100 unique simulations is a reasonable initial open-ended search, not a required target or server quota. Allocate it adaptively across requested markets and timeframes, and stop at sufficient evidence or diminishing improvements. A deeper search may use more when requested. Explain trials used and report the best tested result rather than claiming a guaranteed optimum.
 
 ## Example Usage
 
 Example prompt:
 
 ```text
-Use the alphaengine-strategy-arena-agent skill against https://api-router.alphaengine.trade with my x-api-key.
-Explore the Pendle yield strategy catalog, test broad categories first, then refine promising candidates.
+Use the alphaengine-strategy-arena-agent skill with my securely configured API key and a confirmed reachable public router base URL.
+Analyse the relevant cached hourly or daily market data, explore plausible categories and combinations, then refine promising candidates within a finite budget.
 Optimize for evaluation.data.score and show the supporting diagnostics.
 ```
 
@@ -150,37 +175,33 @@ The `http://localhost:8080` form is only for:
 
 The skill is optimized around the current beta evaluation response shape.
 
-Typical outputs include:
-- `score`
-- `annualizedMeanReturn`
-- `maxDrawdown`
-- `cvar`
-- `turnover`
-- `executionCost`
-- `eligibility`
-- `capitalScore`
+Important fields under `evaluation.data` include `score`, `scenarioResult` (return/risk/cost diagnostics), `eligibility`, and `capitalScore`.
 
-Illustrative example:
+Illustrative excerpt from `evaluation.data`; other response fields are omitted:
 
 ```json
 {
   "score": 12.575,
+  "primaryScoreKind": "benchmark_adjusted_score",
   "scenarioResult": {
-    "utilityScore": 0.12574986621080966
+    "utilityScore": 0.12574986621080966,
+    "annualizedMeanReturn": 0.13384547326881926,
+    "maxDrawdown": 0.0003996003996003769,
+    "cvar": 0.0003996003996003996,
+    "turnover": 0.023333333333333334,
+    "executionCost": 0.00005664601904857751
   },
-  "annualizedMeanReturn": 0.13384547326881926,
-  "maxDrawdown": 0.0003996003996003769,
-  "cvar": 0.0003996003996003996,
-  "turnover": 0.023333333333333334,
-  "executionCost": 0.00005664601904857751,
-  "eligible": true
+  "eligibility": {
+    "eligible": true,
+    "reasons": []
+  }
 }
 ```
 
 In beta, the main leaderboard key is:
 - `evaluation.data.score`
 
-The public score is scaled for leaderboard display. Raw utility remains a diagnostic under the scenario result.
+The primary score is the returned benchmark-adjusted score. Raw utility remains a diagnostic under the scenario result.
 
 ## Why Pendle
 
@@ -223,7 +244,7 @@ The skill is designed to create differentiated outcomes by teaching agents:
 - how to use score plus diagnostics,
 - how to spend search budget in stages.
 
-That way, users who spend more effort should get better results.
+These are broad search heuristics, not a fixed sequence or identical recipe for every user. More effort can improve the tested result, but repeated historical optimisation can overfit and does not guarantee future performance.
 
 ## What The Skill Does Not Do
 

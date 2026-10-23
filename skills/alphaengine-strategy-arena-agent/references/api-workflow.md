@@ -1,360 +1,201 @@
 # API Workflow
 
-Use AlphaEngine's public router directly.
+## Public Surfaces and Authentication
 
-## Auth
+Use separate bases:
 
-Every `/v1/**` request requires:
-- header: `x-api-key`
+- `BFF_BASE_URL=https://beta.alphaengine.trade`: public market reads below, with no API key or Privy token.
+- `ROUTER_BASE_URL`: a confirmed public AlphaEngine router URL supplied by the user or current deployment documentation. All `/v1/**` routes require `x-api-key`.
 
-The skill assumes the user provides:
-- `baseUrl`
-- `apiKey`
+The previously advertised `https://api-router.alphaengine.trade` failed DNS resolution in the October 2026 client check. Do not assume that hostname is operational without a successful connectivity check, or invent a replacement URL. A DNS/TLS/network failure is not API-key rejection. Stop authenticated compute if the base cannot be reached and explain what is missing. Never work around it through anonymous dashboard POSTs, private service addresses or operator endpoints.
 
-Example:
+Use an environment variable or the host's secret mechanism for the key; never ask the user to paste it into chat, embed it in files or log it. Send it only to the confirmed router origin, not to the BFF GETs. Do not forward credentials across redirects.
 
-```text
-baseUrl = https://api-router.alphaengine.trade
-x-api-key = <real-api-key>
+### Public BFF Market Reads
+
+| Method and path | Purpose |
+|---|---|
+| `GET /api/app/markets` | Market catalog, metadata and `availableTimeframes` |
+| `GET /api/app/market-series?marketKey={key}&timeframe={timeframe}` | Historical chart series; `hourly` or `daily` |
+
+These reads have no BFF per-user HTTP rate limiter. The fetch-once rules below reduce agent requests; they are not an enforced server quota.
+
+Successful responses have `{ "requestId": "...", "status": "ok", "data": ... }`:
+
+- Markets: `data.markets[]` includes `key`, `marketId`, `chainId`, `marketAddress`, `name`, `symbol`, `expiry`, `datasetRef`, and `availableTimeframes`.
+- Series: `data` includes `market`, `timeframe`, `available`, `datasetRef`, `snapshotHash`, and `chart[]` points (`timestamp`, `open`, `high`, `low`, `close`, `volume`, `apy`).
+- `available: false` with an empty chart means that timeframe has no chart dataset. Do not silently substitute another timeframe or repeatedly fetch the same unavailable series.
+- BFF errors use `{ "requestId": "...", "status": "error", "error": { "code": "...", "message": "..." } }`, not router problem details.
+
+### Authenticated Router Routes
+
+Every route below requires `x-api-key` and the appropriate scope:
+
+| Routes | Scope |
+|---|---|
+| `GET /v1/families` | `strategy:read` |
+| `GET /v1/families/strategy-arena` | `strategy:read` |
+| `GET /v1/families/strategy-arena/strategies` | `strategy:read` |
+| `GET /v1/families/strategy-arena/strategies/{strategyId}` | `strategy:read` |
+| `GET /v1/families/strategy-arena/strategies/{strategyId}/parameters` | `strategy:read` |
+| `GET /v1/families/strategy-arena/markets` | `strategy:read` |
+| `POST /v1/families/strategy-arena/simulations` | `strategy:simulate` |
+| `POST /v1/families/strategy-arena/simulations/summary` | `strategy:simulate` |
+| `POST /v1/families/strategy-arena/simulations/trades` | `strategy:simulate` |
+| `POST /v1/families/strategy-arena/evaluations` | `evaluation:run` |
+
+Router successes use the same `status: "ok"` envelope. Router market `data` is an array with `marketId`, `marketKey`, `chainId`, `protocol`, and `marketAddress`, unlike the BFF's `data.markets` object. Discover the router mapping once for simulation; match market identity using chain/address and the key, not array position or a guessed numeric ID. BFF `key` is the dashboard `marketKey`.
+
+Router failures use RFC 9457 `application/problem+json`, with typed `code`, `requestId`, and sometimes `fieldErrors`/`family`. Inspect status and structured codes rather than parsing message text.
+
+## Fetch Once and Reuse
+
+1. Reuse an existing valid temporary cache for the current task. General explanations need no GET; historical analysis needs only the relevant catalog/series. Read-only analysis can proceed without a simulation API key.
+2. When data is missing, fetch the catalog once and the selected historical series once per market/timeframe. Fetch additional markets only if the task calls for comparison. Cache router catalogs and parameter schemas too.
+3. Save complete successful JSON responses in a task-specific temporary directory, not a repository. Keep a small manifest with source base, market key/ID, timeframe, fetch time, dataset reference, snapshot hash and observation period. Do not put credentials or request headers in it.
+4. Perform trend/indicator analysis and generate all candidate hypotheses from these local files. Do not put market GETs inside a simulation loop. Fetch again only for missing/corrupt data, a different market/timeframe, an explicit refresh, or evidence that the dataset changed.
+5. Store full simulation/evaluation responses and candidate inputs alongside the analysis. Deduplicate using the computation inputs: router base, market, timeframe, capital, ordered components/weights/parameters, relevant request settings and deterministic seed if used. Ignore correlation-only `submissionId`; preserve component order, because execution may depend on it.
+6. Bind saved results to returned `resolvedDataset.snapshotHash` and execution/scoring profile metadata. Never mix results from different snapshots/profiles as an identical replay. If chart and simulation snapshots differ, label the chart analysis separately and use the simulation's metadata for score comparisons. If a change is detected mid-search, separate the cohorts or rerun a shortlist within the remaining budget.
+
+A repeated local analysis, parameter calculation or comparison needs no GET. A local cache does not pin the backend dataset: each new simulation resolves the official server dataset.
+
+## Hourly and Daily Requests
+
+- Both `"hourly"` (1H) and `"daily"` (1D) are supported. Hourly is the current server default, but always send the chosen value explicitly.
+- Check BFF `availableTimeframes` before requesting a series. Treat unavailable data as unavailable, not as permission to change timeframe silently.
+- Required simulation fields: `marketId` (discovered integer), `timeframe`, `capital` (positive decimal string such as `"100000"`) and `components`.
+- Each component has `strategyId`, object `strategyParams` and integer `weightBps`; weights sum to `10000`. Use surfaced defaults with `{}` when supported, and validate tested values against strategy metadata.
+- Callers do not supply raw datasets or internal dataset component IDs. The server resolves its official dataset, execution and scoring profiles. Supplied `executionConfig` does not override the official arena execution profile; omit it for ordinary searches.
+- Use returned `resolvedDataset` for the snapshot and dates, `resolvedExecutionProfile` for actual fills/costs/guardrails, and `resolvedScoringProfile` for `totalBars`, `warmupBars`, `scoredBars`, `tradeStartIndex`, `scoreStartTimestamp` and `scoreEndTimestamp`.
+- Full traces may contain warmup bars; evaluation scores the returned official window. Do not hardcode warmup/scored bar counts. Windows and holding periods measured in bars have different elapsed durations on 1H versus 1D.
+- Scanning the same historical snapshot repeatedly is parameter search, not new out-of-sample evidence. Keep hourly and daily comparisons labelled separately.
+
+## Compute Units, Concurrency and Pacing
+
+Default limits, checked against the router policy:
+
+| Operation or limit | Default |
+|---|---:|
+| Shared allowance per API key | 50 CU per fixed one-second window |
+| Authenticated GET | 1 CU |
+| Any simulation view | 10 CU per component |
+| Evaluation | 1 CU |
+| Simultaneous simulation requests | 2 |
+| Simultaneous evaluation requests | 4 |
+
+- Reads, simulations and evaluations share the same allowance. Limits are per key and currently maintained in memory per router process; they are not a global account or cross-replica quota. Key-specific configured limits may differ. No daily, hourly or lifetime quota is currently defined by this limiter.
+- Full, summary and trades simulations all execute the simulation. Summary reduces response size, not CU or simulation work. Each evaluation request also consumes compute; save its result.
+- A full simulation plus evaluation costs `10 * componentCount + 1`: 11 CU for one component, 31 for three and 41 for four. Two three-component simulations in the same window need 60 CU and exceed the default allowance, even if concurrency permits two.
+- Five components consume all 50 CU; evaluation or catalog reads must use a later window if no allowance remains. More than five components cost over 50 CU in one request and cannot succeed under the default limit merely by waiting. Explain the constraint and propose a smaller combination, not silent truncation or endless retries.
+- Default agent behaviour: one simulation in flight, a local queue/accounting of all authenticated request costs, and pacing below the shared ceiling. A conservative option is at most one simulation/evaluation pair per second for up to four components, with discovery completed beforehand; reserve a later window for a five-component evaluation.
+- Concurrency ceilings are limits, not targets. Include retries in the task's finite request/time budget, and do not create more keys or switch routes to evade limits.
+
+## Simulation Views and Evaluation
+
+- `/simulations`: full canonical ledger/portfolio output. When scoring candidates, call this once, save it, and send `{ "simulation": simulation.data }` to `/evaluations`.
+- `/simulations/summary`: compact metrics/diagnostics; useful when those alone answer the question. It cannot be submitted to `/evaluations`.
+- `/simulations/trades`: trade/skipped-signal events. Use only if event diagnostics are needed and not already derivable from saved full results. It cannot be submitted to `/evaluations`.
+
+For beta score comparisons, prefer full simulation plus evaluation directly rather than summary followed by an identical full rerun. Treat these POSTs as compute requests: repeated calls may rerun computation, and `submissionId` is correlation metadata, not an idempotency key.
+
+The primary comparison key is `evaluation.data.score` (the returned benchmark-adjusted score). Raw utility and `capitalScore` are separate diagnostics, not substitute primary scores. Explain eligibility, return, drawdown, CVaR, turnover and execution costs from the returned evaluation. Do not rewrite the scoring formula locally.
+
+A signal may be vetoed by guardrails: inspect `result.componentRuns[].executionDiagnostics`, including `skippedByReason`; trades views additionally expose `eventKind: "skipped_signal"`. Read the resolved profile rather than assuming that every signal trades or changing official execution settings to force a fill.
+
+## HTTP Examples
+
+Examples require `curl`, `jq`, and a real router base/key provided securely outside chat. Commands write task data only to temporary files. The market/key/strategy in examples are illustrative, not a recommendation.
+
+Fetch public catalog and one series; do not repeat these commands in candidate loops:
+
+```bash
+set -euo pipefail
+BFF_BASE_URL='https://beta.alphaengine.trade'
+SEARCH_DIR=$(mktemp -d "${TMPDIR:-/tmp}/alphaengine-search.XXXXXX")
+MARKET_KEY='susde'
+TIMEFRAME='hourly' # use 'daily' for 1D
+curl --fail-with-body --silent --show-error \
+  "$BFF_BASE_URL/api/app/markets" --output "$SEARCH_DIR/bff-markets.json"
+jq -e --arg key "$MARKET_KEY" --arg timeframe "$TIMEFRAME" \
+  '.status == "ok" and any(.data.markets[];
+    .key == $key and .availableTimeframes[$timeframe] != null)' \
+  "$SEARCH_DIR/bff-markets.json"
+curl --fail-with-body --silent --show-error --get \
+  "$BFF_BASE_URL/api/app/market-series" \
+  --data-urlencode "marketKey=$MARKET_KEY" \
+  --data-urlencode "timeframe=$TIMEFRAME" \
+  --output "$SEARCH_DIR/market-series.json"
+jq -e '.status == "ok" and .data.available == true and (.data.chart | length > 0)' \
+  "$SEARCH_DIR/market-series.json"
 ```
 
-Plain-language auth failures:
-- `401` means the key is missing or invalid.
-- `403` means the key is valid, but inactive or missing the required scope.
+The jq check must pass before using the series. Stop on curl failure; do not treat an error response as cached market data. Select the market from the catalog before using it; write source/fetch metadata to the cache manifest as described above.
 
-## Supported Endpoints
+Discover router IDs once with the key; `ROUTER_BASE_URL` and `ALPHAENGINE_API_KEY` must already be set securely. Never enable shell tracing or curl verbose output with the key:
 
-Use only these public routes unless the router adds more and this repo is updated:
-
-- `GET /v1/families`
-- `GET /v1/families/strategy-arena`
-- `GET /v1/families/strategy-arena/strategies`
-- `GET /v1/families/strategy-arena/strategies/{strategyId}`
-- `GET /v1/families/strategy-arena/strategies/{strategyId}/parameters`
-- `GET /v1/families/strategy-arena/markets`
-- `POST /v1/families/strategy-arena/simulations`
-- `POST /v1/families/strategy-arena/simulations/summary`
-- `POST /v1/families/strategy-arena/simulations/trades`
-- `POST /v1/families/strategy-arena/evaluations`
-
-Do not assume any public endpoint exists for:
-- live on-chain execution,
-- listener/operator control,
-- ranking tournaments,
-- private data-plane or decrypt-for-tx workflows.
-
-## Response Shape
-
-Successful responses use this envelope:
-
-```json
-{
-  "requestId": "...",
-  "status": "ok",
-  "data": {}
-}
+```bash
+: "${ROUTER_BASE_URL:?Set the confirmed public router base securely}"
+: "${ALPHAENGINE_API_KEY:?Configure the API key securely outside chat}"
+curl --fail-with-body --silent --show-error \
+  "$ROUTER_BASE_URL/v1/families/strategy-arena/markets" \
+  -H "x-api-key: $ALPHAENGINE_API_KEY" \
+  --output "$SEARCH_DIR/router-markets.json"
+MARKET_ID=$(jq -er --arg key "$MARKET_KEY" \
+  '[.data[] | select(.marketKey == $key)] |
+    if length == 1 then .[0].marketId else error("Expected one market") end' \
+  "$SEARCH_DIR/router-markets.json")
 ```
 
-Error responses use RFC 9457 problem details with AlphaEngine extensions such as:
-- `code`
-- `family`
-- `requestId`
-- `fieldErrors` when relevant
+Check that discovery returned exactly one intended market with matching chain/address. Fetch needed strategy details and parameters once from the documented GETs before testing. No simulation request should run if discovery or validation failed.
 
-## Current Arena Request Semantics
+Build one candidate, with the explicitly selected hourly/daily timeframe:
 
-1. Current public competition simulation is daily-only.
-2. Callers submit:
-- `marketId`
-- `timeframe`
-- `capital`
-- `components`
-3. `marketId` is discovered from `GET /v1/families/strategy-arena/markets`.
-   Do not assume numeric IDs are stable across deployments.
-4. `timeframe` should be sent as `"daily"` for clarity.
-5. `capital` must be sent as a decimal string, for example `"100000"`, not as a JSON number.
-6. `components` is an array of strategy sleeves. For a single-strategy baseline, use one component with `weightBps: 10000`.
-7. `strategyParams` should still be sent as an object. When strategy defaults are surfaced publicly, `strategyParams: {}` is the correct default baseline request.
-8. Callers do not submit internal dataset or component identifiers in arena mode; the server resolves those internally.
-9. Callers may omit `executionConfig`; when supplied in arena mode it is ignored in favor of the server-owned execution profile.
-10. `submissionId` is optional correlation metadata only; it does not make simulations idempotent.
-11. Some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family.
-
-## Dashboard Paste-Ready Strategy JSON
-
-Dashboard submissions are not the same shape as public API simulation requests.
-
-For API exploration, use `marketId` and `capital`. For beta dashboard paste-ready output, use `marketKey` when you need to pin a market, or omit it and let the UI fill the selected/default market.
-
-When the user asks for a final strategy or anything submit-ready, prefer minimal JSON:
-
-```json
-{
-  "components": [
-    {
-      "strategyId": "roll-down-capture",
-      "weightBps": 10000,
-      "strategyParams": {
-        "field": "logYield",
-        "minDaysToExpiry": 0,
-        "maxDaysToExpiry": 1000,
-        "volWindow": 10,
-        "maxYieldVol": 0.01
-      }
-    }
-  ]
-}
+```bash
+jq -n --argjson marketId "$MARKET_ID" --arg timeframe "$TIMEFRAME" \
+  '{marketId: $marketId, timeframe: $timeframe, capital: "100000", components: [
+    {strategyId: "yield-rsi", strategyParams: {}, weightBps: 10000}
+  ]}' > "$SEARCH_DIR/candidate.json"
 ```
 
-The UI self-validates and fills defaults such as:
-- `marketKey`
-- `timeframe`
-- `config`
+Run the full simulation once, then evaluate its saved data. Pace these requests using the limits above; stop on any failed command or non-ok response:
 
-If a full object is requested or needed, use this dashboard shape:
+```bash
+curl --fail-with-body --silent --show-error \
+  "$ROUTER_BASE_URL/v1/families/strategy-arena/simulations" \
+  -H "x-api-key: $ALPHAENGINE_API_KEY" -H 'content-type: application/json' \
+  --data-binary "@$SEARCH_DIR/candidate.json" --output "$SEARCH_DIR/simulation.json"
+jq -e '.status == "ok" and (.data | type == "object")' "$SEARCH_DIR/simulation.json"
+jq '{simulation: .data}' "$SEARCH_DIR/simulation.json" > "$SEARCH_DIR/evaluation-request.json"
+curl --fail-with-body --silent --show-error \
+  "$ROUTER_BASE_URL/v1/families/strategy-arena/evaluations" \
+  -H "x-api-key: $ALPHAENGINE_API_KEY" -H 'content-type: application/json' \
+  --data-binary "@$SEARCH_DIR/evaluation-request.json" --output "$SEARCH_DIR/evaluation.json"
+jq -e '.status == "ok"' "$SEARCH_DIR/evaluation.json"
+```
+
+## Dashboard Output
+
+Use dashboard shape, not the public API request: `marketKey`, `timeframe`, and `components` (`strategyId`, `weightBps`, `strategyParams`). Pin the actual tested market and timeframe so UI defaults cannot change the recommendation. Weights sum to `10000`; retain the tested parameters. Omit `config` unless required to reproduce supported dashboard inputs; it cannot override official scoring/execution. `SKILL.md` shows 1H output; this is an illustrative 1D shape, not a tested recommendation:
 
 ```json
 {
   "marketKey": "susdf",
   "timeframe": "daily",
   "components": [
-    {
-      "strategyId": "roll-down-capture",
-      "weightBps": 10000,
-      "strategyParams": {
-        "field": "logYield",
-        "minDaysToExpiry": 0,
-        "maxDaysToExpiry": 1000,
-        "volWindow": 10,
-        "maxYieldVol": 0.01
-      }
-    }
-  ],
-  "config": {
-    "initialEquity": 100000,
-    "fillRule": "close",
-    "feeBps": 3,
-    "slippageBps": 2,
-    "slippageModel": {
-      "type": "fixed_bps",
-      "bps": 2
-    },
-    "maxAbsPosition": 1,
-    "initialPosition": 0
-  }
+    { "strategyId": "yield-rsi", "strategyParams": {}, "weightBps": 10000 }
+  ]
 }
 ```
 
-Do not describe dashboard `config` as overriding the official public competition execution profile. Treat it as dashboard-compatible submission shape; server-owned arena scoring/execution remains authoritative.
+## Failures and Bounded Retries
 
-## Strategy Discovery Sequence
+- `401` / `AUTH_MISSING_API_KEY` / `AUTH_INVALID_API_KEY`: stop compute and request secure key setup/correction, not repeated retries.
+- `403` / `AUTH_INACTIVE_API_KEY` / `AUTH_INSUFFICIENT_SCOPE`: stop and explain the permission required.
+- `429` / `RATE_LIMIT_EXCEEDED` or `RATE_LIMIT_CONCURRENCY_EXCEEDED`: inspect `Retry-After` and `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`. They accompany rejections; do not assume every success contains them. Honour the wait, pace the shared queue, and allow at most three retries of an otherwise valid request within the time budget. Stop if it remains blocked. An over-budget request must change before retrying.
+- `REQUEST_VALIDATION_FAILED`: fix the structured `fieldErrors` (router) or `error.details` (BFF) before another attempt.
+- `DATA_DATASET_NOT_FOUND`: record the market/timeframe dataset gap and stop that branch. Do not change timeframe silently.
+- `STRATEGY_MISSING_REQUIRED_FEATURE`: record the support gap; skip that strategy for the affected dataset rather than retrying nearby parameters that require the same missing feature.
+- `INTERNAL_UNEXPECTED`, unavailable upstream/auth services or other 5xx: retain the request ID and report the blocker. Do not run an automatic retry storm or invent results.
+- DNS/TLS/network failures: stop automated calls and report the failing base. Offline reasoning may continue, clearly labelled as untested.
 
-For a first-time user or agent, the safe public sequence is:
-1. `GET /v1/families/strategy-arena`
-2. `GET /v1/families/strategy-arena/strategies`
-3. `GET /v1/families/strategy-arena/strategies/{strategyId}` or `/parameters`
-4. `GET /v1/families/strategy-arena/markets`
-5. `POST /v1/families/strategy-arena/simulations/summary`
-6. `POST /v1/families/strategy-arena/simulations`
-7. `POST /v1/families/strategy-arena/evaluations`
-
-This avoids assuming internal ids, hidden datasets, or operator knobs.
-
-## Simulation Response Views
-
-1. `POST /simulations`
-- returns the full canonical simulation payload
-- includes the full per-bar ledger and portfolio series
-- use this when you need the full trace
-- use this before calling `/evaluations`
-
-2. `POST /simulations/summary`
-- returns the compact comparison view
-- best default for broad sweeps, UI cards, and agent loops
-- includes metrics, execution diagnostics, and resolved profile metadata
-- does not include bar-by-bar ledgers or portfolio series
-
-3. `POST /simulations/trades`
-- returns only event-filtered rows
-- includes:
-  - executed trades where `turnover != 0`
-  - skipped signals where `signalTarget != executedPosition` and no turnover occurred
-- use this when you need to inspect why a strategy traded or was blocked
-
-## Official Arena Execution Profile
-
-Current public arena runs use a server-owned execution profile. The important current values are:
-- `fillRule = close`
-- `feeBps = 2`
-- `slippageBps = 0`
-- `positionMode = long_only`
-- `maxAbsPosition = 1`
-- `initialPosition = 0`
-- `ammExecutionMode = pool_state`
-- `ammAdjustmentBps = 0`
-- `maxEstimatedSlippageBps = 100`
-- `maxTradeNotional = capital`
-- `maxTradePctLiquidity = 0.05`
-- `minHoldBars = 3`
-- `minEdgeToCostRatio = 2.5`
-
-Plain-language meaning for non-DeFi-native users:
-- the system only trades long, not short
-- the system assumes close-price fills for current public arena mode
-- a trade can be skipped if the estimated slippage is too high
-- a trade can be skipped if it would be too large relative to the pool liquidity proxy
-- a strategy can generate a signal and still not trade because the guardrails veto the trade
-- a position may be held through a signal change if the minimum hold period or edge-vs-cost hurdle says churn is not worth it
-
-## Skipped Signals And Trade Diagnostics
-
-A signal is not the same thing as an executed trade.
-
-Important places to inspect:
-- `summary.result.componentRuns[].executionDiagnostics`
-- `summary.result.componentRuns[].executionDiagnostics.skippedByReason`
-- `trades.result.componentRuns[].events`
-- `eventKind = "skipped_signal"`
-
-If a strategy produces signals but few or zero trades, that often means the official guardrails blocked the proposed trades rather than the strategy producing no signal at all.
-
-## Official Scoring Window
-
-Current public arena scoring is server-owned.
-
-The current policy is:
-- the server resolves warmup and scoring internally
-- current arena-final daily packs use 30 warmup bars and roughly 60 scored/evaluation bars
-- short synthetic fixtures may still be fully scored
-
-Important interpretation points:
-- full simulation traces may include warmup bars before the scored window
-- evaluation trims to the scored window internally
-- do not hardcode 30, 60, or 61 scored bars in client logic
-- `resolvedScoringProfile` tells you:
-  - `totalBars`
-  - `warmupBars`
-  - `scoredBars`
-  - `tradeStartIndex`
-  - `scoreStartTimestamp`
-  - `scoreEndTimestamp`
-
-## Beta Scoring Rule
-
-For strategy comparisons in beta:
-- primary sort key: `evaluation.data.score`
-- `evaluation.data.score` is the public scaled leaderboard score
-- raw utility remains available as a diagnostic under the scenario result, for example `scenarioResult.utilityScore`
-
-Important diagnostics to inspect alongside score:
-- `annualizedMeanReturn`
-- `maxDrawdown`
-- `cvar`
-- `turnover`
-- `executionCost`
-- `eligibility`
-- `capitalScore`
-
-Use `capitalScore` as a secondary diagnostic, not the primary leaderboard key, unless the user explicitly asks for a stricter evidence-oriented ranking.
-
-## Example Sequence
-
-1. list strategies
-2. inspect parameters for a shortlist
-3. list markets and choose a public `marketId`
-4. run broad comparisons with `/simulations/summary`
-5. rerun shortlisted candidates with full `/simulations`
-6. post the full `simulation.data` into `/evaluations`
-7. compare scores and diagnostics
-8. refine the promising candidates
-
-## Example HTTP Calls
-
-List strategies:
-
-```bash
-curl -s "$BASE_URL/v1/families/strategy-arena/strategies" \
-  -H "x-api-key: $ALPHAENGINE_API_KEY"
-```
-
-List markets and get a usable `marketId`:
-
-```bash
-curl -s "$BASE_URL/v1/families/strategy-arena/markets" \
-  -H "x-api-key: $ALPHAENGINE_API_KEY"
-```
-
-Run a compact simulation for a baseline sweep:
-
-```bash
-curl -s "$BASE_URL/v1/families/strategy-arena/simulations/summary" \
-  -H "content-type: application/json" \
-  -H "x-api-key: $ALPHAENGINE_API_KEY" \
-  -d '{
-    "marketId": 1,
-    "timeframe": "daily",
-    "capital": "100000",
-    "components": [
-      {
-        "strategyId": "yield-rsi",
-        "strategyParams": {},
-        "weightBps": 10000
-      }
-    ]
-  }'
-```
-
-`marketId: 1` is illustrative. Always read markets first and use the live `marketId` for the intended `marketKey`.
-
-Run a full simulation for one shortlisted candidate:
-
-```bash
-curl -s "$BASE_URL/v1/families/strategy-arena/simulations" \
-  -H "content-type: application/json" \
-  -H "x-api-key: $ALPHAENGINE_API_KEY" \
-  -d '{
-    "marketId": 1,
-    "timeframe": "daily",
-    "capital": "100000",
-    "components": [
-      {
-        "strategyId": "yield-rsi",
-        "strategyParams": {},
-        "weightBps": 10000
-      }
-    ]
-  }'
-```
-
-Run an evaluation using the full simulation payload:
-
-```bash
-curl -s "$BASE_URL/v1/families/strategy-arena/evaluations" \
-  -H "content-type: application/json" \
-  -H "x-api-key: $ALPHAENGINE_API_KEY" \
-  -d '{
-    "simulation": { "...": "full simulation.data from the prior /simulations call" }
-  }'
-```
-
-## Common Failure Interpretation
-
-1. `REQUEST_VALIDATION_FAILED`
-- request body shape is wrong or contains unsupported fields
-- common causes include sending numbers instead of strings for decimal fields like `capital`
-
-2. `DATA_DATASET_NOT_FOUND`
-- the server could not resolve the official dataset for the selected market/profile
-- this is a server dataset/config issue, not usually a caller mistake
-
-3. `STRATEGY_MISSING_REQUIRED_FEATURE`
-- the chosen strategy needs feature families the current arena dataset/profile does not provide
-- this is usually a support-gap signal, not a malformed request
-
-4. `INTERNAL_UNEXPECTED`
-- the server hit an unexpected runtime issue; retry only after checking deploy/config state
-
-## Non-Idempotency Note
-
-`POST /simulations`, `POST /simulations/summary`, `POST /simulations/trades`, and `POST /evaluations` should be treated as compute requests, not as idempotent ledger mutations.
-Repeated calls may rerun computation.
+Match typed codes/statuses; never infer canonical failures from message strings. If a simulation response was lost, a retry may recompute: account for that uncertainty and never claim an exact server execution count from client attempts alone.
