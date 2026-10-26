@@ -5,9 +5,9 @@
 Use separate bases:
 
 - `BFF_BASE_URL=https://beta.alphaengine.trade`: public market reads below, with no API key or Privy token.
-- `ROUTER_BASE_URL=https://d2e5kbmhk8dosc.cloudfront.net`: the current public router base. All `/v1/**` routes require the user's `x-api-key`.
+- `ROUTER_BASE_URL=https://api-router.alphaengine.trade`: the public router base. All `/v1/**` routes require the user's `x-api-key`.
 
-The CloudFront base is the public compute endpoint while DNS/certificate validation for `https://api-router.alphaengine.trade` is pending. The profile may still display that planned hostname; use the CloudFront base above until deployment documentation confirms the custom domain is active. Both use the same account key; changing the base does not require key regeneration. Do not automatically switch origins on failure or forward credentials across redirects. A DNS/TLS/network failure is not API-key rejection: stop compute and explain the failing base. Never work around it through anonymous dashboard POSTs, private service addresses or operator endpoints.
+The custom hostname is live over verified HTTPS, with CloudFront and Caddy forwarding requests to the API router. Use this documented hostname for agent compute; do not automatically switch origins on failure or forward credentials across redirects. Existing account keys remain valid when upgrading from the earlier CloudFront base. A DNS/TLS/network failure is not API-key rejection: stop compute and explain the failing base. Never work around it through anonymous dashboard POSTs, private service addresses or operator endpoints.
 
 Use an environment variable or the host's secret mechanism for the key; never ask the user to paste it into chat, embed it in files or log it. Send it only to the confirmed router origin, not to the BFF GETs. Do not forward credentials across redirects.
 
@@ -142,7 +142,7 @@ The jq check must pass before using the series. Stop on curl failure; do not tre
 Discover router IDs once with the key; configure `ALPHAENGINE_API_KEY` securely first. Never enable shell tracing or curl verbose output with the key:
 
 ```bash
-ROUTER_BASE_URL='https://d2e5kbmhk8dosc.cloudfront.net'
+ROUTER_BASE_URL='https://api-router.alphaengine.trade'
 : "${ALPHAENGINE_API_KEY:?Configure the API key securely outside chat}"
 curl --fail-with-body --silent --show-error \
   "$ROUTER_BASE_URL/v1/families/strategy-arena/markets" \

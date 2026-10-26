@@ -69,7 +69,7 @@ flowchart LR
 
 This diagram illustrates a search, not a mandatory sequence for every question. General explanations need no network calls or simulation; market analysis uses the public BFF GETs only as needed. Simulation and evaluation use the authenticated public `api-router`.
 
-The skill does **not** require the thin client. The current public compute base is **`https://d2e5kbmhk8dosc.cloudfront.net`**, with the user's `x-api-key` on `/v1/**` requests. The planned `https://api-router.alphaengine.trade` hostname awaits DNS/certificate validation; the profile may still display it. Use the CloudFront base until the custom domain is confirmed live. Report connectivity failures rather than bypassing authentication through dashboard POSTs, and do not forward keys across redirects.
+The skill does **not** require the thin client. The public compute base is **`https://api-router.alphaengine.trade`**, with the user's `x-api-key` on `/v1/**` requests. The hostname is live over HTTPS and forwards through CloudFront to the API router. Existing account keys work unchanged. Report connectivity failures rather than bypassing authentication through dashboard POSTs, and do not forward keys across redirects or automatically switch origins.
 
 ## Install
 

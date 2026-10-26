@@ -1,5 +1,10 @@
 # Development Log
 
+## 2026-10-26 — Custom API hostname enabled
+
+- Set `https://api-router.alphaengine.trade` as the documented agent compute base after owner DNS validation, ACM issuance and CloudFront certificate/alias attachment. Remove pending-domain guidance; retain credential-origin checks and no automatic cross-origin fallback. Existing keys, public API contracts and rate limits are unchanged.
+- Verify HTTPS and typed missing-key 401, authenticated market discovery and one small single-component daily `yield-rsi` simulation on sUSDe. The simulation returned HTTP 200 in about 670 ms with request ID `f7d862e7-bd5f-45e2-9e5e-88bcc5f78e1b`. Validate the skill/references/examples and refresh the installed copy from the published update.
+
 ## 2026-10-26
 
 - Set the current authenticated router base to `https://d2e5kbmhk8dosc.cloudfront.net` after the existing AWS ingress was connected to `/v1/*` and OpenAPI. Explain that the custom API hostname/profile label awaits DNS validation, while the same user key works at the current base. Preserve credential-origin checks, bounded search, caching and all existing compute limits.
