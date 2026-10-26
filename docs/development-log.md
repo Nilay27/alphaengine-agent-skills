@@ -1,5 +1,11 @@
 # Development Log
 
+## 2026-10-26
+
+- Set the current authenticated router base to `https://d2e5kbmhk8dosc.cloudfront.net` after the existing AWS ingress was connected to `/v1/*` and OpenAPI. Explain that the custom API hostname/profile label awaits DNS validation, while the same user key works at the current base. Preserve credential-origin checks, bounded search, caching and all existing compute limits.
+- Verified a profile-generated user key against the public endpoint: market discovery and strategy parameters, full simulation plus evaluation for hourly and daily data, and public chart reads succeed. Missing/invalid keys return typed 401 errors, an over-budget request returns 429 with `Retry-After`, private routes return 404 and BFF market reads remain available. Two small simulation runs were used; no wallets or on-chain transactions were involved.
+- Validate the skill structure, references, JSON/shell examples and diff; refresh the older local installation from the published skill. The branded API hostname remains pending its owner's DNS records and subsequent CloudFront certificate attachment.
+
 ## 2026-10-23
 
 - Added direct API-key onboarding at `https://beta.alphaengine.trade/#profile/api-key` (with manual Profile -> Settings -> API keys fallback for older dashboard releases). Documented one-time copying, regeneration for an unsaved/invalid key, immediate replacement of the single active account key, and updating every integration. Invalid-key guidance links this setup view and resumes after secure configuration; network, quota and scope failures retain their own remedies. No recoverable-key/reveal backend is required. Paired dashboard coverage passes eight focused tests, type checking/build and signed-out in-app Browser checks; refreshed skill structure/reference/JSON/shell and diff checks pass locally.

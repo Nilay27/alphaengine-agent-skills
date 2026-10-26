@@ -5,9 +5,9 @@
 Use separate bases:
 
 - `BFF_BASE_URL=https://beta.alphaengine.trade`: public market reads below, with no API key or Privy token.
-- `ROUTER_BASE_URL`: a confirmed public AlphaEngine router URL supplied by the user or current deployment documentation. All `/v1/**` routes require `x-api-key`.
+- `ROUTER_BASE_URL=https://d2e5kbmhk8dosc.cloudfront.net`: the current public router base. All `/v1/**` routes require the user's `x-api-key`.
 
-The previously advertised `https://api-router.alphaengine.trade` failed DNS resolution in the October 2026 client check. Do not assume that hostname is operational without a successful connectivity check, or invent a replacement URL. A DNS/TLS/network failure is not API-key rejection. Stop authenticated compute if the base cannot be reached and explain what is missing. Never work around it through anonymous dashboard POSTs, private service addresses or operator endpoints.
+The CloudFront base is the public compute endpoint while DNS/certificate validation for `https://api-router.alphaengine.trade` is pending. The profile may still display that planned hostname; use the CloudFront base above until deployment documentation confirms the custom domain is active. Both use the same account key; changing the base does not require key regeneration. Do not automatically switch origins on failure or forward credentials across redirects. A DNS/TLS/network failure is not API-key rejection: stop compute and explain the failing base. Never work around it through anonymous dashboard POSTs, private service addresses or operator endpoints.
 
 Use an environment variable or the host's secret mechanism for the key; never ask the user to paste it into chat, embed it in files or log it. Send it only to the confirmed router origin, not to the BFF GETs. Do not forward credentials across redirects.
 
@@ -139,10 +139,10 @@ jq -e '.status == "ok" and .data.available == true and (.data.chart | length > 0
 
 The jq check must pass before using the series. Stop on curl failure; do not treat an error response as cached market data. Select the market from the catalog before using it; write source/fetch metadata to the cache manifest as described above.
 
-Discover router IDs once with the key; `ROUTER_BASE_URL` and `ALPHAENGINE_API_KEY` must already be set securely. Never enable shell tracing or curl verbose output with the key:
+Discover router IDs once with the key; configure `ALPHAENGINE_API_KEY` securely first. Never enable shell tracing or curl verbose output with the key:
 
 ```bash
-: "${ROUTER_BASE_URL:?Set the confirmed public router base securely}"
+ROUTER_BASE_URL='https://d2e5kbmhk8dosc.cloudfront.net'
 : "${ALPHAENGINE_API_KEY:?Configure the API key securely outside chat}"
 curl --fail-with-body --silent --show-error \
   "$ROUTER_BASE_URL/v1/families/strategy-arena/markets" \

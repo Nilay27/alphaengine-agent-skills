@@ -17,7 +17,7 @@ Use public AlphaEngine HTTP surfaces for market understanding and strategy explo
 
 1. Establish the task and access.
    - Respect the requested market, timeframe and effort. Both `hourly` (1H) and `daily` (1D) are supported; hourly is the server default. Send the selected timeframe explicitly.
-   - Public BFF market GETs need no key. Simulations/evaluations use a confirmed public router base URL and the user's `x-api-key`; follow the API reference's connectivity checks and credential boundaries.
+   - Public BFF market GETs need no key. Simulations/evaluations use the current public router base in [API workflow](references/api-workflow.md) and the user's `x-api-key`; follow its connectivity checks and credential boundaries. The planned custom API hostname may await DNS even when the documented CloudFront base is live.
    - If a compute key is missing or rejected as invalid, direct the user to [API-key settings](https://beta.alphaengine.trade/#profile/api-key). They sign in, generate a key (or regenerate an unsaved/invalid one), copy it once into their secure agent configuration, and then continue. Only one key is active per account: regeneration replaces the old key immediately, so every agent/integration using it must be updated. See the API reference for setup and error distinctions.
 
 2. Discover only what is needed and cache it.
