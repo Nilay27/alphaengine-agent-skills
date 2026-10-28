@@ -44,6 +44,7 @@ With the current skill, an agent can:
 - understand why signals may be skipped under the official arena guardrails,
 - run evaluation requests over full simulation payloads,
 - sort candidates by `evaluation.data.score`,
+- prepare complete parameter objects using available JSON tools or an optional offline helper, and export the exact tested components,
 - explain tradeoffs using return, drawdown, CVaR, turnover, cost, and eligibility,
 - return paste-ready strategy JSON for `beta.alphaengine.trade` when a user asks what to submit.
 
@@ -70,6 +71,8 @@ flowchart LR
 This diagram illustrates a search, not a mandatory sequence for every question. General explanations need no network calls or simulation; market analysis uses the public BFF GETs only as needed. Simulation and evaluation use the authenticated public `api-router`.
 
 The skill does **not** require the thin client. The public compute base is **`https://api-router.alphaengine.trade`**, with the user's `x-api-key` on `/v1/**` requests. The hostname is live over HTTPS and forwards through CloudFront to the API router. Existing account keys work unchanged. Report connectivity failures rather than bypassing authentication through dashboard POSTs, and do not forward keys across redirects or automatically switch origins.
+
+The skill never inspects or controls a browser. The user handles login, key generation, dashboard review and submission. Public documentation can be fetched over HTTP.
 
 ## Install
 
@@ -132,9 +135,9 @@ Current public arena assumptions:
 - numeric `marketId` values are deployment config, so agents should not hardcode them
 - callers send `capital` as a decimal string and typically start with `weightBps: 10000` for single-strategy baselines
 - callers do not submit internal dataset or component identifiers; the server resolves them internally
-- callers may use `strategyParams: {}` when strategy metadata surfaces defaults
+- the API permits omitted defaulted parameters, but this skill resolves every public parameter from cached metadata before simulation and retains the same complete object through export; it never invents defaults
 - both `hourly` (1H) and `daily` (1D) are supported; send the chosen timeframe explicitly, and read returned dataset/execution/scoring profiles rather than assuming fixed warmup/scoring windows
-- for official score comparisons, save a full `/simulations` result and pass its `simulation.data` to `/evaluations`; summary/trades views cost the same simulation CU and cannot be evaluated directly
+- for public API score comparisons, save a full `/simulations` result and pass its `simulation.data` to `/evaluations`; summary/trades views cost the same simulation CU and cannot be evaluated directly
 - the server-owned arena guardrails can block trades even when signals are present
 - dashboard recommendations pin the tested `marketKey` and `timeframe`, retain tested components/parameters, and use weights summing to `10000`; the UI can fill `config`
 - some strategies may still fail with `STRATEGY_MISSING_REQUIRED_FEATURE` because the current arena dataset/profile does not provide every required feature family
@@ -158,6 +161,10 @@ Choose a finite task budget: up to 100 unique simulations is a reasonable initia
 ## Example Usage
 
 Get a key at [Profile -> Settings -> API keys](https://beta.alphaengine.trade/#profile/api-key), signing in first if needed. If the direct route is not yet available in your deployed dashboard version, open those tabs manually. Generate and copy the full key once into your agent's secure configuration; it cannot be revealed later. If you lose it, regenerate anytime: **only one key is active per account, and the replacement immediately invalidates the old key**. Update all agents/integrations using it. The skill links this page when compute has a missing/invalid key; network and rate-limit failures do not require regeneration.
+
+Follow [private credential setup](./skills/alphaengine-strategy-arena-agent/references/credential-setup.md) for macOS Keychain or Windows PowerShell encrypted storage. The loader must run in the actual API client's process; exporting a variable in another terminal does not configure an already running desktop agent. Agents verify only accessibility and never display the key. No third-party credential package is required.
+
+**Python is not required to use the skill.** Agents follow [runtime-neutral candidate validation](./skills/alphaengine-strategy-arena-agent/references/candidate-validation.md) with existing tools such as JavaScript or native PowerShell. The [optional Python helper and Bash recipe](./skills/alphaengine-strategy-arena-agent/references/api-workflow.md#prepare-and-export-candidates) use Python 3, curl and jq when already available. The helper needs no packages, network or API key. It checks public parameter metadata, not private submission acceptance.
 
 Example prompt:
 
@@ -203,7 +210,11 @@ Illustrative excerpt from `evaluation.data`; other response fields are omitted:
 In beta, the main leaderboard key is:
 - `evaluation.data.score`
 
-The primary score is the returned benchmark-adjusted score. Raw utility remains a diagnostic under the scenario result.
+The primary score is the returned benchmark-adjusted **public API evaluation score** for the supplied simulation. Raw utility remains a diagnostic under the scenario result. State the tested capital and retain the complete request, output identity and resolved dataset/profiles. Private evaluation uses correlated hidden markets and stress scenarios; the public result does not predict a final submission score. A specific discrepancy needs its actual evaluation evidence.
+
+Every final strategy recommendation ends with:
+
+> **NOTE:** This result is based on simulation. Actual submission scores may differ because official evaluation uses correlated hidden markets and stress tests, separate from the market shown in the UI, to help prevent players from gaming the system.
 
 ## Why Pendle
 
@@ -261,7 +272,20 @@ It does not:
 
 - `skills/alphaengine-strategy-arena-agent/SKILL.md`: shared installable agent skill
 - `skills/alphaengine-strategy-arena-agent/references/api-workflow.md`: public API usage rules
+- `skills/alphaengine-strategy-arena-agent/references/credential-setup.md`: private macOS/Windows setup and process-access preflight
+- `skills/alphaengine-strategy-arena-agent/references/candidate-validation.md`: required validation and export rules for any available runtime
+- `skills/alphaengine-strategy-arena-agent/scripts/prepare_candidate.py`: optional Python implementation of offline parameter validation and faithful dashboard export
 - `skills/alphaengine-strategy-arena-agent/references/pendle-intuition.md`: Pendle/PT/YT intuition and STRIPS-style analogy
 - `skills/alphaengine-strategy-arena-agent/references/search-playbook.md`: broad search process and anti-convergence guidance
 - `CLAUDE.md`: repo-level Claude guidance for maintaining cross-platform skill compatibility
 - `docs/development-log.md`: repo change log
+
+## Validation
+
+Maintainers with Python 3 can run the offline helper regression suite from the repository root; this is not an end-user prerequisite:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+It covers missing-default expansion, actual `min`/`max` bounds, invalid types/enums/non-finite values, weights, market/timeframe, replay and unchanged export. It does not call live compute, access credentials or use a browser.
