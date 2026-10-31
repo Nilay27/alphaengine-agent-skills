@@ -1,5 +1,12 @@
 # Development Log
 
+## 2026-10-31 — Larger compute allowance with compact-basket defaults
+
+- Align the skill's compute guidance with the router's 200 CU fixed one-second allowance. Costs stay 10 CU/component and 1 CU/read or evaluation; concurrency stays two simulations/four evaluations. A five-component simulation/evaluation pair costs 51 CU; sixteen costs 161 CU. Continue to honour lower key-specific limits, actual rejection headers, one simulation in flight and bounded retries.
+- Require every candidate searched, tested or recommended to contain at most five components by default. Only an explicit user request permits 6–16; broad exploration, a higher trial budget or a request for the best score is insufficient. Warn before the expanded search about significantly greater search time/CU consumption, per-component encryption and potentially greater submission gas. Keep the requested size and finite budget; no fabricated time/gas estimate.
+- Update the shared entrypoint, API workflow, search playbook and README together. Publish after the router policy/configuration is verified live, then refresh the installed Codex copy. Preserve all existing credential, endpoint, scoring and human-submission boundaries.
+- Validation: all 20 offline helper regressions, skill-creator validation, local reference checks and diff checks pass. Router policy is live at 200 CU for static/shared and trader defaults, verified in the deployed process; concurrency remains 2/4. No skill logic automatically expands component count because more quota is available.
+
 ## 2026-10-28 — Reliable strategy preparation and API-only operation
 
 - Materialize every public strategy parameter from cached metadata before simulation, deduplication and export. Preserve explicit overrides, component order and the saved tested object; reject missing defaults and invalid metadata instead of inventing values. Add runtime-neutral candidate validation and an optional standard-library Python helper with structured local errors. Python is not an end-user requirement; agents use available JSON/runtime tools without installing a language runtime.

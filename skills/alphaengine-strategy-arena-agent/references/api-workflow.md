@@ -89,7 +89,7 @@ Default limits, checked against the router policy:
 
 | Operation or limit | Default |
 |---|---:|
-| Shared allowance per API key | 50 CU per fixed one-second window |
+| Shared allowance per API key | 200 CU per fixed one-second window |
 | Authenticated GET | 1 CU |
 | Any simulation view | 10 CU per component |
 | Evaluation | 1 CU |
@@ -98,9 +98,9 @@ Default limits, checked against the router policy:
 
 - Reads, simulations and evaluations share the same allowance. Limits are per key and currently maintained in memory per router process; they are not a global account or cross-replica quota. Key-specific configured limits may differ. No daily, hourly or lifetime quota is currently defined by this limiter.
 - Full, summary and trades simulations all execute the simulation. Summary reduces response size, not CU or simulation work. Each evaluation request also consumes compute; save its result.
-- A full simulation plus evaluation costs `10 * componentCount + 1`: 11 CU for one component, 31 for three and 41 for four. Two three-component simulations in the same window need 60 CU and exceed the default allowance, even if concurrency permits two.
-- Five components consume all 50 CU; evaluation or catalog reads must use a later window if no allowance remains. More than five components cost over 50 CU in one request and cannot succeed under the default limit merely by waiting. Explain the constraint and propose a smaller combination, not silent truncation or endless retries.
-- Default agent behaviour: one simulation in flight, a local queue/accounting of all authenticated request costs, and pacing below the shared ceiling. A conservative option is at most one simulation/evaluation pair per second for up to four components, with discovery completed beforehand; reserve a later window for a five-component evaluation.
+- A full simulation plus evaluation costs `10 * componentCount + 1`: 11 CU for one component, 31 for three, 51 for five and 161 for sixteen. Reserve allowance for catalog reads and other work using the same key. Two 16-component simulations need 320 CU and cannot share a default 200-CU window, even if two concurrency slots are free.
+- Keep candidates at five components or fewer unless the user explicitly requests a larger basket, as required by [the skill's search rules](../SKILL.md#workflow). Sixteen is the hard maximum. Larger explicitly requested baskets consume more of each window and must be paced accordingly; warn about substantially longer search/encryption and increased submission gas before starting.
+- Default agent behaviour: one simulation in flight, a local queue/accounting of all authenticated request costs, and pacing below the shared ceiling. Reuse cached discovery and saved evaluation responses. Key-specific limits can differ; honour the actual limit and reset headers on a rejection instead of assuming every key has the default allowance.
 - Concurrency ceilings are limits, not targets. Include retries in the task's finite request/time budget, and do not create more keys or switch routes to evade limits.
 
 ## Simulation Views and Evaluation

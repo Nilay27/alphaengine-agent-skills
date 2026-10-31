@@ -148,13 +148,13 @@ The skill does **not** assume any public ranking endpoint exists.
 
 | Operation or limit | Default |
 |---|---:|
-| Shared budget per API key | 50 CU per fixed one-second window |
+| Shared budget per API key | 200 CU per fixed one-second window |
 | Authenticated GET | 1 CU |
 | Simulation, any view | 10 CU per component |
 | Evaluation | 1 CU |
 | Concurrent simulations / evaluations | 2 / 4 |
 
-Limits currently operate per key within each router process, with no daily quota from this limiter; configured key-specific limits may differ. A three-component simulation plus evaluation costs 31 CU. Five components consume 50 CU, so the evaluation needs a later window; more than five cannot fit a default single request. Start with one simulation in flight, pace the shared queue, deduplicate candidates, and honour bounded `Retry-After` handling. See [API workflow](./skills/alphaengine-strategy-arena-agent/references/api-workflow.md) for details and failure codes.
+Limits currently operate per key within each router process, with no daily quota from this limiter; configured key-specific limits may differ. A simulation plus evaluation costs 51 CU for five components and 161 CU for sixteen. The skill searches and recommends at most five components by default. It explores 6–16 only at the user's explicit request, after warning about substantially longer search/encryption time and potentially higher submission gas. Start with one simulation in flight, pace the shared queue, deduplicate candidates, and honour bounded `Retry-After` handling. See [API workflow](./skills/alphaengine-strategy-arena-agent/references/api-workflow.md) for details and failure codes.
 
 Choose a finite task budget: up to 100 unique simulations is a reasonable initial open-ended search, not a required target or server quota. Allocate it adaptively across requested markets and timeframes, and stop at sufficient evidence or diminishing improvements. A deeper search may use more when requested. Explain trials used and report the best tested result rather than claiming a guaranteed optimum.
 

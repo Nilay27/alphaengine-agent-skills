@@ -18,6 +18,8 @@ This is an example direction, not a required stage sequence, fixed split of tria
 
 ## Broad Exploration and Deeper Refinement
 
+Follow the [component-count rule](../SKILL.md#workflow): search and recommend at most five components by default. A user must explicitly request a larger basket before exploring 6–16 components. Explain the extra search time/CU use, per-component encryption time and submission gas first; keep the expanded search within the agreed budget.
+
 - Discover supported strategies and read parameter schemas only for candidates worth testing. Begin with simple category baselines where useful; surfaced defaults avoid arbitrary initial tweaks. Materialize those defaults before simulation using [candidate validation](candidate-validation.md) in an available runtime or the optional Python helper. Save and deduplicate the complete request, not just parameter overrides.
 - Use full simulations plus saved-payload evaluations when comparing `evaluation.data.score`. Summary/trades are alternative views with equal simulation CU cost, not cheaper score shortcuts.
 - Compare the early results and diagnostics to decide where the next simulations are most informative. Retain more than one plausible direction rather than tuning only the first good result.
